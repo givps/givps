@@ -1,57 +1,56 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# License : MIT
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
+# --- Colors ---
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
+
+# Detect VPS Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo "Checking VPS..."
-sleep 1
 clear
 
-# Warna
-Green="\033[32m"
-Red="\033[31m"
-Yellow="\033[33m"
-Blue="\033[36m"
-Reset="\033[0m"
-
-# ===== MENU TROJAN =====
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
-echo -e "\E[0;100;33m           • TROJAN MENU •          \E[0m"
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
+# ===== TROJAN MENU =====
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}           • TROJAN MENU •          ${nc}"
+echo -e "${red}=========================================${nc}"
 echo ""
-echo -e " [${Blue}1${Reset}] Create Trojan Account"
-echo -e " [${Blue}2${Reset}] Trial Trojan Account"
-echo -e " [${Blue}3${Reset}] Extend Trojan Account"
-echo -e " [${Blue}4${Reset}] Delete Trojan Account"
-echo -e " [${Blue}5${Reset}] Check Trojan Logins"
-echo -e " [${Blue}6${Reset}] List Created Accounts"
+echo -e " [${blue}1${nc}] Create Trojan Account"
+echo -e " [${blue}2${nc}] Create Trial Trojan Account"
+echo -e " [${blue}3${nc}] Extend Trojan Account"
+echo -e " [${blue}4${nc}] Delete Trojan Account"
+echo -e " [${blue}5${nc}] Check Trojan Logins"
+echo -e " [${blue}6${nc}] List Created Accounts"
 echo ""
-echo -e " [${Red}0${Reset}] Back to Main Menu"
+echo -e " [${red}0${nc}] Back to Main Menu"
 echo -e " [x] Exit"
 echo ""
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
+echo -e "${red}=========================================${nc}"
 echo ""
 
-read -rp " Select menu : " opt
+read -rp " Select an option: " opt
 echo ""
 
 case $opt in
-    1) clear ; add-tr ;;                       # Create Trojan Account
-    2) clear ; trialtrojan ;;                  # Trial Trojan Account
-    3) clear ; renew-tr ;;                     # Extend Trojan Account
-    4) clear ; del-tr ;;                       # Delete Trojan Account
-    5) clear ; cek-tr ;;                       # Check User Logins
-    6) clear ; cat /etc/log-create-trojan.log ;;  # Show Created Accounts
-    0) clear ; menu ;;                         # Back to Main Menu
-    x|X) exit 0 ;;                             # Exit
+    1) clear ; add-tr ;;                        # Create Trojan account
+    2) clear ; trialtrojan ;;                   # Create trial Trojan account
+    3) clear ; renew-tr ;;                      # Extend Trojan account
+    4) clear ; del-tr ;;                        # Delete Trojan account
+    5) clear ; cek-tr ;;                        # Check Trojan logins
+    6) clear ; cat /etc/log-create-trojan.log ;; # Show created accounts log
+    0) clear ; menu ;;                          # Back to main menu
+    x|X) exit 0 ;;                              # Exit script
     *) 
-        echo -e "${Red}[Error]${Reset} Invalid option!"
+        echo -e "${red}[Error]${nc} Invalid option!"
         sleep 1
-        m-trojan
-        ;;
+        m-trojan ;;                             # Reload Trojan menu
 esac

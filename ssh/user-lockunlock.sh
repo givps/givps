@@ -1,89 +1,94 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.1
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
-# Warna
+# --- Colors ---
 red='\e[1;31m'
-green='\e[1;32m'
-blue='\e[1;34m'
+green='\e[0;32m'
 yellow='\e[1;33m'
-NC='\e[0m' # No Color
+blue='\e[1;34m'
+nc='\e[0m'
 
-# Fungsi Lock User
+# Detect VPS Public IP
+MYIP=$(wget -qO- ipv4.icanhazip.com)
+clear
+
+# Function: Lock User
 lock_user() {
-    read -p "Input username to LOCK: " username
+    read -p "Enter username to LOCK: " username
     if id "$username" &>/dev/null; then
         passwd -l "$username" &>/dev/null
         clear
         echo -e " "
-        echo -e "==============================================="
-        echo -e " Username : ${blue}$username${NC}"
-        echo -e " Status   : ${red}LOCKED${NC}"
+        echo -e "${red}=========================================${nc}"
+        echo -e " Username : ${blue}$username${nc}"
+        echo -e " Status   : ${red}LOCKED${nc}"
         echo -e "-----------------------------------------------"
-        echo -e " Login access for user ${blue}$username${NC} has been disabled."
-        echo -e "==============================================="
+        echo -e " Login access for user ${blue}$username${nc} has been disabled."
+        echo -e "${red}=========================================${nc}"
     else
         echo -e " "
-        echo -e "${red}Error:${NC} Username '${yellow}$username${NC}' not found on this server!"
+        echo -e "${red}Error:${nc} Username '${yellow}$username${nc}' not found on this server!"
         echo -e " "
     fi
 }
 
-# Fungsi Unlock User
+# Function: Unlock User
 unlock_user() {
-    read -p "Input username to UNLOCK: " username
+    read -p "Enter username to UNLOCK: " username
     if id "$username" &>/dev/null; then
         passwd -u "$username" &>/dev/null
         clear
         echo -e " "
-        echo -e "==============================================="
-        echo -e " Username : ${blue}$username${NC}"
-        echo -e " Status   : ${green}UNLOCKED${NC}"
+        echo -e "${red}=========================================${nc}"
+        echo -e " Username : ${blue}$username${nc}"
+        echo -e " Status   : ${green}UNLOCKED${nc}"
         echo -e "-----------------------------------------------"
-        echo -e " Login access for user ${blue}$username${NC} has been restored."
-        echo -e "==============================================="
+        echo -e " Login access for user ${blue}$username${nc} has been restored."
+        echo -e "${red}=========================================${nc}"
     else
         echo -e " "
-        echo -e "${red}Error:${NC} Username '${yellow}$username${NC}' not found on this server!"
+        echo -e "${red}Error:${nc} Username '${yellow}$username${nc}' not found on this server!"
         echo -e " "
     fi
 }
 
-# Fungsi List Semua User
+# Function: List All Users
 list_all_users() {
     echo -e " "
-    echo -e "=========== ${yellow}ALL USERS${NC} ==========="
+    echo -e "=========== ${yellow}ALL USERS${nc} ==========="
     awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd
-    echo -e "==============================================="
+    echo -e "${red}=========================================${nc}"
 }
 
-# Fungsi List User yang Locked
+# Function: List Locked Users
 list_locked_users() {
     echo -e " "
-    echo -e "=========== ${red}LOCKED USERS${NC} ==========="
+    echo -e "=========== ${red}LOCKED USERS${nc} ==========="
     passwd -S -a | awk '$2=="L" {print $1}'
-    echo -e "==============================================="
+    echo -e "${red}=========================================${nc}"
 }
 
-# Fungsi List User yang Aktif
+# Function: List Active Users
 list_active_users() {
     echo -e " "
-    echo -e "========== ${green}ACTIVE USERS${NC} ==========="
+    echo -e "========== ${green}ACTIVE USERS${nc} ==========="
     passwd -S -a | awk '$2=="P" {print $1}'
-    echo -e "==============================================="
+    echo -e "${red}=========================================${nc}"
 }
 
-# Menu Pilihan
+# Menu
 while true; do
     clear
-    echo -e "==============================================="
-    echo -e "     ${yellow}SSH USER MANAGEMENT MENU${NC}"
-    echo -e "==============================================="
+    echo -e "${red}=========================================${nc}"
+    echo -e "     ${blue}SSH USER MANAGEMENT MENU${nc}"
+    echo -e "${red}=========================================${nc}"
     echo -e " 1) Lock User"
     echo -e " 2) Unlock User"
     echo -e " 3) List All Users"
@@ -91,8 +96,8 @@ while true; do
     echo -e " 5) List Active Users"
     echo -e " 0) Back To Menu"
     echo -e ""
-    echo -e   "Press x or [ Ctrl+C ] • To-Exit"
-    echo -e "==============================================="
+    echo -e   "Press x or [ Ctrl+C ] to exit"
+    echo -e "${red}=========================================${nc}"
     read -p "Choose an option [0-5]: " option
     echo -e " "
 
@@ -104,9 +109,9 @@ while true; do
         5) list_active_users ;;
         0) clear ; exit ; m-sshovpn ;;
         x) exit ;;
-        *) echo -e "${red}Invalid option!${NC}" ;;
+        *) echo -e "${red}Invalid option!${nc}" ;;
     esac
 
     echo -e ""
-    read -n 1 -s -r -p "Press any key to return to menu..."
+    read -n 1 -s -r -p "Press any key to return to the menu..."
 done

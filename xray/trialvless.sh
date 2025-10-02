@@ -1,58 +1,58 @@
 #!/bin/bash
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
 # =========================================
-# pewarna hidup
-RED='\033[0;31m'
-NC='\033[0m'
-GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-# ==========================================
-# Getting
+# Name    : givps
+# Title   : Auto Script VPS For Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
+# =========================================
+
+# --- Colors ---
+red='\e[1;31m'    # Bright Red
+green='\e[0;32m'  # Green
+yellow='\e[1;33m' # Bright Yellow
+blue='\e[1;34m'   # Bright Blue
+nc='\e[0m'        # No Color (reset)
+
+# Get VPS public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo "Checking VPS..."
+echo -e "${green}Checking VPS...${nc}"
 clear
 
-# domain + ports
+# Get domain & ports
 domain=$(cat /etc/xray/domain)
-tls=$(grep -w "Vless WS TLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
-none=$(grep -w "Vless WS none TLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
+tls=$(grep -w "TLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
+none=$(grep -w "noneTLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
 
-# generate trial user
+# Generate trial VLESS user
 user="trial$(tr -dc 'A-Z0-9' </dev/urandom | head -c4)"
 uuid=$(cat /proc/sys/kernel/random/uuid)
-masaaktif=1
-exp=$(date -d "$masaaktif days" +"%Y-%m-%d")
+expired=1
+exp=$(date -d "$expired days" +"%Y-%m-%d")
 
-# add to xray config (marker #vless & #vlessgrpc harus ada di config.json)
+# Add to Xray config (marker #vless & #vlessgrpc must exist in config.json)
 sed -i '/#vless$/a\#! '"${user} ${exp}"'\
 },{"id": "'"${uuid}"'","email": "'"${user}"'"}' /etc/xray/config.json
 
 sed -i '/#vlessgrpc$/a\#! '"${user} ${exp}"'\
 },{"id": "'"${uuid}"'","email": "'"${user}"'"}' /etc/xray/config.json
 
-# restart service
+# Restart services
 systemctl restart xray >/dev/null 2>&1
 service cron restart >/dev/null 2>&1
 
-# buat link
+# Create VLESS links
 vlesslink1="vless://${uuid}@${domain}:${tls}?path=/vless&security=tls&encryption=none&type=ws&sni=${domain}#${user}"
 vlesslink2="vless://${uuid}@${domain}:${none}?path=/vless&encryption=none&type=ws#${user}"
 vlesslink3="vless://${uuid}@${domain}:${tls}?mode=gun&security=tls&encryption=none&type=grpc&serviceName=vless-grpc&sni=${domain}#${user}"
 
-# simpan info trial
+# Save trial info
 mkdir -p /etc/vless/trial
 echo "${exp}" > /etc/vless/trial/${user}.conf
 echo "VLESS Trial: ${user} | Exp: ${exp}" >> /etc/log-create-user.log
 
-# auto cleaner
+# Auto-cleaner script
 cat > /usr/local/bin/vless-cleaner <<'EOF'
 #!/bin/bash
 today=$(date +%Y-%m-%d)
@@ -74,36 +74,36 @@ EOF
 
 chmod +x /usr/local/bin/vless-cleaner
 
-# tambahkan ke cron jika belum ada
+# Add cron job if not exists
 if ! crontab -l | grep -q "vless-cleaner"; then
     (crontab -l 2>/dev/null; echo "10 0 * * * /usr/local/bin/vless-cleaner") | crontab -
 fi
 
-# output info akun
+# Display account info
 clear
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "\\E[44;1;39m        TRIAL VLESS        \E[0m"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "Remarks        : ${user}"
-echo -e "Domain         : ${domain}"
-echo -e "Wildcard       : (bug.com).${domain}"
-echo -e "Port TLS       : ${tls}"
-echo -e "Port none TLS  : ${none}"
-echo -e "Port gRPC      : ${tls}"
-echo -e "ID             : ${uuid}"
-echo -e "Encryption     : none"
-echo -e "Network        : ws / grpc"
-echo -e "Path WS        : /vless"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}        TRIAL VLESS ACCOUNT        ${nc}"
+echo -e "${red}=========================================${nc}"
+echo -e "Remarks          : ${user}"
+echo -e "Domain           : ${domain}"
+echo -e "Wildcard         : bug.com.${domain}"
+echo -e "Port TLS         : ${tls}"
+echo -e "Port none TLS    : ${none}"
+echo -e "Port gRPC        : ${tls}"
+echo -e "ID               : ${uuid}"
+echo -e "Encryption       : none"
+echo -e "Network          : ws / grpc"
+echo -e "Path WS          : /vless"
 echo -e "ServiceName gRPC : vless-grpc"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "Link TLS       : ${vlesslink1}"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "Link none TLS  : ${vlesslink2}"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "Link gRPC      : ${vlesslink3}"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "Expired On     : ${exp}"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "${red}=========================================${nc}"
+echo -e "Link TLS         : ${vlesslink1}"
+echo -e "${red}=========================================${nc}"
+echo -e "Link none TLS    : ${vlesslink2}"
+echo -e "${red}=========================================${nc}"
+echo -e "Link gRPC        : ${vlesslink3}"
+echo -e "${red}=========================================${nc}"
+echo -e "Expired On       : ${exp}"
+echo -e "${red}=========================================${nc}"
 echo ""
-read -n 1 -s -r -p "Press any key to back on menu"
+read -n 1 -s -r -p "Press any key to return to menu"
 m-vless

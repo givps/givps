@@ -1,24 +1,23 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
-MYIP=$(curl -sS ipv4.icanhazip.com)
-clear
+# --- Colors ---
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
 
-# Colors
-RED='\e[31m'
-GREEN='\e[32m'
-YELLOW='\e[33m'
-BLUE='\e[34m'
-PURPLE='\e[35m'
-CYAN='\e[36m'
-NC='\e[0m' # No Color
-BOLD='\e[1m'
+# Detect VPS Public IP
+MYIP=$(wget -qO- ipv4.icanhazip.com)
+clear
 
 # VPS Information
 domain=$(cat /etc/xray/domain 2>/dev/null)
@@ -39,7 +38,7 @@ fi
 # OS Uptime
 uptime="$(uptime -p | cut -d " " -f 2-10)"
 
-# Network Statistics
+# Network statistics (using interface eth0)
 dtoday="$(vnstat -i eth0 | awk '/today/ {print $2,$3}')"
 utoday="$(vnstat -i eth0 | awk '/today/ {print $5,$6}')"
 ttoday="$(vnstat -i eth0 | awk '/today/ {print $8,$9}')"
@@ -54,7 +53,7 @@ dmon="$(vnstat -i eth0 -m | grep "$(date +"%b '%y")" | awk '{print $3,$4}')"
 umon="$(vnstat -i eth0 -m | grep "$(date +"%b '%y")" | awk '{print $6,$7}')"
 tmon="$(vnstat -i eth0 -m | grep "$(date +"%b '%y")" | awk '{print $9,$10}')"
 
-# User Info
+# User Info (placeholders)
 Exp2="Lifetime"
 Name="VIP-MEMBERS"
 
@@ -63,9 +62,6 @@ cpu_usage1=$(ps aux | awk '{sum+=$3} END {print sum}')
 cores=$(grep -c "^processor" /proc/cpuinfo)
 cpu_usage=$(awk -v c="$cores" -v u="$cpu_usage1" 'BEGIN {printf "%.2f%%", (u/c)}')
 
-#CITY=$(curl -s https://ipinfo.io/city)
-#LOC=$(curl -s https://ipapi.co/country_code)
-#ISP=$(curl -s https://ipapi.co/org)
 DAY=$(date +%A)
 DATE=$(date +%m/%d/%Y)
 DATE2=$(date -R | cut -d " " -f -5)
@@ -78,41 +74,38 @@ uram=$(free -m | awk 'NR==2 {print $3}')
 fram=$(free -m | awk 'NR==2 {print $4}')
 
 clear
-echo -e "${YELLOW} -------------------------------------------------${NC}"
-echo -e "${BLUE}                  VPS INFORMATION                 ${NC}"
-echo -e "${YELLOW} -------------------------------------------------${NC}"
-echo -e "${GREEN} OS            ${NC}: $(hostnamectl | grep 'Operating System' | cut -d ' ' -f5-)"
-echo -e "${GREEN} Uptime        ${NC}: $uptime"
-echo -e "${GREEN} Public IP     ${NC}: $IPVPS"
-#echo -e "${GREEN} City          ${NC}: $CITY"
-#echo -e "${GREEN} Country       ${NC}: $LOC"
-#echo -e "${GREEN} ASN           ${NC}: $ISP"
-echo -e "${GREEN} Domain        ${NC}: $domain"
-echo -e "${GREEN} TLS Cert      ${NC}: $tlsStatus"
-echo -e "${GREEN} Date & Time   ${NC}: $DATE2"
-echo -e "${YELLOW} -------------------------------------------------${NC}"
-echo -e "${BLUE}                    RAM INFO                      ${NC}"
-echo -e "${YELLOW} -------------------------------------------------${NC}"
-echo -e "${GREEN} RAM Used      ${NC}: $uram MB"
-echo -e "${GREEN} RAM Total     ${NC}: $tram MB"
-echo -e "${YELLOW} -------------------------------------------------${NC}"
-echo -e "${BLUE}                     MENU                         ${NC}"
-echo -e "${YELLOW} -------------------------------------------------${NC}"
-echo -e "${CYAN} 1${NC} : Menu SSH"
-echo -e "${CYAN} 2${NC} : Menu Vmess"
-echo -e "${CYAN} 3${NC} : Menu Vless"
-echo -e "${CYAN} 4${NC} : Menu Trojan"
-echo -e "${CYAN} 5${NC} : Menu Shadowsocks"
-echo -e "${CYAN} 6${NC} : Menu Setting"
-echo -e "${CYAN} 7${NC} : Status Service"
-echo -e "${CYAN} 8${NC} : Clear RAM Cache"
-echo -e "${CYAN} 9${NC} : Reboot VPS"
-echo -e "${CYAN} x${NC} : Exit Script (run again with: menu)"
-echo -e "${YELLOW} -------------------------------------------------${NC}"
-echo -e "${GREEN} Client Name   ${NC}: $Name"
-echo -e "${GREEN} Expired       ${NC}: $Exp2"
-echo -e "${YELLOW} -------------------------------------------------${NC}"
-echo -e "${CYAN} ----------------- t.me/givpn_grup -----------------${NC}"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}                  VPS INFORMATION                 ${nc}"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue} OS            ${nc}: $(hostnamectl | grep 'Operating System' | cut -d ' ' -f5-)"
+echo -e "${blue} Uptime        ${nc}: $uptime"
+echo -e "${blue} Public IP     ${nc}: $IPVPS"
+echo -e "${blue} Domain        ${nc}: $domain"
+echo -e "${blue} TLS Cert      ${nc}: $tlsStatus"
+echo -e "${blue} Date & Time   ${nc}: $DATE2"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}                    RAM INFO                      ${nc}"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue} RAM Used      ${nc}: $uram MB"
+echo -e "${blue} RAM Total     ${nc}: $tram MB"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}                     MENU                         ${nc}"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue} 1${nc} : SSH Menu"
+echo -e "${blue} 2${nc} : VMess Menu"
+echo -e "${blue} 3${nc} : VLESS Menu"
+echo -e "${blue} 4${nc} : Trojan Menu"
+echo -e "${blue} 5${nc} : Shadowsocks Menu"
+echo -e "${blue} 6${nc} : Settings Menu"
+echo -e "${blue} 7${nc} : Service Status"
+echo -e "${blue} 8${nc} : Clear RAM Cache"
+echo -e "${blue} 9${nc} : Reboot VPS"
+echo -e "${blue} x${nc} : Exit Script (run again with: menu)"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue} Client Name   ${nc}: $Name"
+echo -e "${blue} Expired       ${nc}: $Exp2"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}             t.me/givps_com  ${nc}"
 echo ""
 read -p " Select menu : " opt
 echo ""

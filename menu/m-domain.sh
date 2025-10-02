@@ -1,52 +1,51 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# License : MIT
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
+# --- Colors ---
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
+
+# Detect VPS Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo "Checking VPS..."
-sleep 1
 clear
 
-# Warna
-Green="\033[32m"
-Red="\033[31m"
-Yellow="\033[33m"
-Blue="\033[36m"
-Reset="\033[0m"
-
 # ===== DOMAIN MENU =====
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
-echo -e "\E[0;100;33m           • DOMAIN MENU •          \E[0m"
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
-echo -e "\E[0;100;33m  • Don't Forget to RENEW CERTIFICATE •  \E[0m"
-echo -e "\E[0;100;33m        • After Changing Domain •        \E[0m"
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}           • DOMAIN MENU •          ${nc}"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}  • Don't Forget to RENEW CERTIFICATE •  ${nc}"
+echo -e "${blue}        • After Changing Domain •        ${nc}"
+echo -e "${red}=========================================${nc}"
 echo ""
-echo -e " [${Blue}1${Reset}] Change VPS Domain"
-echo -e " [${Blue}2${Reset}] Renew Domain Certificate"
+echo -e " [${blue}1${nc}] Change VPS Domain"
+echo -e " [${blue}2${nc}] Renew Domain Certificate"
 echo ""
-echo -e " [${Red}0${Reset}] Back to System Menu"
+echo -e " [${red}0${nc}] Back to System Menu"
 echo -e " [x] Exit"
 echo ""
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
+echo -e "${red}=========================================${nc}"
 echo ""
 
-read -rp " Select menu : " opt
+read -rp " Select an option: " opt
 echo ""
 
 case $opt in
-    1) clear ; add-host ;;
-    2) clear ; certv2ray ;;
-    0) clear ; m-system ;;
-    x|X) exit 0 ;;
+    1) clear ; add-host ;;         # Call function to change VPS domain
+    2) clear ; xray-crt ;;         # Call function to renew certificate
+    0) clear ; m-system ;;          # Return to main system menu
+    x|X) exit 0 ;;                  # Exit script
     *) 
-       echo -e "${Red}[Error]${Reset} Invalid option!"
+       echo -e "${red}[Error]${nc} Invalid option!"
        sleep 1
-       m-domain
-       ;;
+       m-domain ;;                   # Reload domain menu
 esac

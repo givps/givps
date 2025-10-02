@@ -1,30 +1,37 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# License : MIT
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
-# --- Get VPS IP ---
+# --- Colors ---
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
+
+# Detect VPS Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo "Checking VPS..."
 clear
 
 # --- Detect XRAY / V2RAY domain ---
-if grep -q "XRAY" /root/log-install.txt; then
+if grep -q "XRAY" ~/log-install.txt; then
     DOMAIN=$(cat /etc/xray/domain)
 else
     DOMAIN=$(cat /etc/v2ray/domain)
 fi
 
 # --- Extract service ports from log ---
-PORT_SSH_WS=$(grep -w "SSH Websocket" ~/log-install.txt | cut -d: -f2 | awk '{print $1}')
-PORT_SSH_SSL_WS=$(grep -w "SSH SSL Websocket" /root/log-install.txt | cut -d: -f2 | awk '{print $1}')
-PORT_OPENSSH=$(grep -w "OpenSSH" /root/log-install.txt | cut -d: -f2 | awk '{print $1}')
-PORT_DROPBEAR=$(grep -w "Dropbear" /root/log-install.txt | cut -d: -f2 | awk '{print $1,$2}')
-PORT_SSL=$(grep -w "Stunnel4" ~/log-install.txt | cut -d: -f2)
+PORT_SSH_WS=$(grep -w "noneTLS" ~/log-install.txt | cut -d: -f2 | awk '{print $1}')
+PORT_SSH_SSL_WS=$(grep -w "TLS" ~/log-install.txt | cut -d: -f2 | awk '{print $1}')
+PORT_OPENSSH=$(grep -w "OpenSSH" ~/log-install.txt | cut -d: -f2 | awk '{print $1,$2}')
+PORT_DROPBEAR=$(grep -w "Dropbear" ~/log-install.txt | cut -d: -f2 | awk '{print $1,$2}')
+PORT_SSL=$(grep -w "Stunnel4" ~/log-install.txt | cut -d: -f2 | awk '{print $1,$2}')
 
 # --- Trial Account Settings ---
 USER="trial$(tr -dc X-Z0-9 </dev/urandom | head -c4)"
@@ -41,29 +48,29 @@ read -p "Enter max simultaneous logins (default=1): " MAX_LOGIN
 MAX_LOGIN=${MAX_LOGIN:-1}
 
 clear
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "\E[0;41;36m            TRIAL SSH              \E[0m"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}            TRIAL SSH              ${nc}"
+echo -e "${red}=========================================${nc}"
 echo -e "Username   : $USER"
 echo -e "Password   : $PASS"
 echo -e "Expired On : $EXP_DATE"
 echo -e "Max Login  : $MAX_LOGIN"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "${red}=========================================${nc}"
 echo -e "IP         : $MYIP"
 echo -e "Host       : $DOMAIN"
 echo -e "OpenSSH    : $PORT_OPENSSH"
 echo -e "Dropbear   : $PORT_DROPBEAR"
 echo -e "SSH WS     : $PORT_SSH_WS"
 echo -e "SSH SSL WS : $PORT_SSH_SSL_WS"
-echo -e "SSL/TLS    : $PORT_SSL"
+echo -e "Stunnel4   : $PORT_SSL"
 echo -e "UDPGW      : 7100-7900"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "${red}=========================================${nc}"
 echo -e "Payload WSS"
 echo -e "GET wss://bug.com HTTP/1.1[crlf]Host: ${DOMAIN}[crlf]Upgrade: websocket[crlf][crlf]"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "${red}=========================================${nc}"
 echo -e "Payload WS"
 echo -e "GET / HTTP/1.1[crlf]Host: $DOMAIN[crlf]Upgrade: websocket[crlf][crlf]"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "${red}=========================================${nc}"
 
 # --- Auto Remove Expired Accounts ---
 TODAY=$(date +%s)

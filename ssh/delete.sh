@@ -1,55 +1,45 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.1 (Fixed)
-# Author  : givps
-# License : MIT
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
+# --- Colors ---
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
+
+# Detect VPS Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-hariini=$(date +%d-%m-%Y)
-
 clear
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "\E[44;1;39m              ⇱ AUTO DELETE ⇲             \E[0m"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"  
-echo "Checking and removing expired users..."
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"  
 
-# Prepare log files
-ALLUSER_LOG="/usr/local/bin/alluser"
-DELETED_LOG="/usr/local/bin/deleteduser"
-: > "$ALLUSER_LOG"
-: > "$DELETED_LOG"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}            ⇱ DELETE SSH USER ⇲          ${nc}"
+echo -e "${red}=========================================${nc}"
+echo ""
 
-# Read users from /etc/shadow
-while IFS=: read -r username _ lastchg min max warn inactive expire rest; do
-    # Skip system accounts (UID < 1000 usually not in /etc/shadow anyway)
-    [[ -z "$max" || "$max" == "" ]] && continue
+# --- Ask for username ---
+read -rp "🔑 Enter the SSH username to delete: " USERNAME
 
-    # Expiry in seconds
-    userexpireinseconds=$(( (lastchg + max) * 86400 ))
-    tglexp=$(date -d @"$userexpireinseconds" +"%d %b %Y")
-    todaystime=$(date +%s)
-
-    # Format username to fixed width (15 chars)
-    padded_user=$(printf "%-15s" "$username")
-
-    # Log all users
-    echo "Expired- User : $padded_user Expire at : $tglexp" >> "$ALLUSER_LOG"
-
-    # If expired, delete user
-    if (( userexpireinseconds < todaystime )); then
-        echo "Expired- Username : $username expired at $tglexp, removed : $hariini" >> "$DELETED_LOG"
-        echo "⚠️ User $username expired ($tglexp) → removed $hariini"
-        userdel -r "$username" 2>/dev/null || true
+# --- Validate input ---
+if [[ -z "$USERNAME" ]]; then
+    echo -e "⚠️  Error: Username cannot be empty!"
+else
+    if id "$USERNAME" &>/dev/null; then
+        sudo userdel -r "$USERNAME" &>/dev/null
+        echo -e "✅ User '$USERNAME' has been deleted successfully."
+    else
+        echo -e "❌ Error: User '$USERNAME' does not exist on this system."
     fi
-done < /etc/shadow
+fi
 
-echo -e "\n\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo "✅ Expired users cleanup done."
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-
-read -n 1 -s -r -p "Press any key to return to menu..."
+echo ""
+echo -e "${red}=========================================${nc}"
+read -n 1 -s -r -p "Press any key to return to the menu..."
 m-sshovpn

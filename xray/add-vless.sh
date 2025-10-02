@@ -1,73 +1,77 @@
 #!/bin/bash
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
+# =========================================
+# Name    : givps
+# Title   : Auto Script VPS for Creating VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
-# Warna
-RED='\033[0;31m'; NC='\033[0m'; GREEN='\033[0;32m'
-ORANGE='\033[0;33m'; BLUE='\033[0;34m'; PURPLE='\033[0;35m'
-CYAN='\033[0;36m'; LIGHT='\033[0;37m'
+# --- Colors ---
+red='\e[1;31m'    # Bright Red
+green='\e[0;32m'  # Green
+yellow='\e[1;33m' # Bright Yellow
+blue='\e[1;34m'   # Bright Blue
+nc='\e[0m'        # No Color (reset)
 
-# ==========================================
-# Ambil domain & port
+# Get VPS Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo "Checking VPS..."
+echo -e "${green}Checking VPS...${nc}"
 clear
 
+# Load config
 source /var/lib/ipvps.conf
-if [[ "$IP" = "" ]]; then
+if [[ -z "$IP" ]]; then
   domain=$(cat /etc/xray/domain)
 else
   domain=$IP
 fi
 
-tls=$(grep -w "Vless WS TLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
-none=$(grep -w "Vless WS none TLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
+tls=$(grep -w "TLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
+none=$(grep -w "noneTLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
 
 # ==========================================
-# Input user
+# Input new user
 CLIENT_EXISTS=1
 until [[ $user =~ ^[a-zA-Z0-9_]+$ && ${CLIENT_EXISTS} == '0' ]]; do
-    echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo -e "\E[44;1;39m        Add Vless Account          \E[0m"
-    echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    read -rp "User: " -e user
+    echo -e "${red}=========================================${nc}"
+    echo -e "${blue}          Add VLESS Account              ${nc}"
+    echo -e "${red}=========================================${nc}"
+    read -rp "Username: " -e user
     CLIENT_EXISTS=$(grep -w "$user" /etc/xray/config.json | wc -l)
 
     if [[ ${CLIENT_EXISTS} == '1' ]]; then
         clear
-        echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-        echo -e "\E[44;1;39m        Add Vless Account          \E[0m"
-        echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+        echo -e "${red}=========================================${nc}"
+        echo -e "${blue}          Add VLESS Account              ${nc}"
+        echo -e "${red}=========================================${nc}"
         echo ""
-        echo "A client with the specified name already exists, please choose another name."
+        echo "A client with this username already exists. Please choose another one."
         echo ""
-        read -n 1 -s -r -p "Press any key to back on menu"
+        read -n 1 -s -r -p "Press any key to return to the menu..."
         m-vless
     fi
 done
 
 # ==========================================
-# Generate UUID & Expired
+# Generate UUID & Expiration
 uuid=$(cat /proc/sys/kernel/random/uuid)
-read -p "Expired (days): " masaaktif
-exp=$(date -d "$masaaktif days" +"%Y-%m-%d")
+read -p "Expired (days): " expired
+exp=$(date -d "$expired days" +"%Y-%m-%d")
 
-# Tambahkan user ke config.json
+# Add user into config.json
 sed -i '/#vless$/a\### '"$user $exp"'\
 },{"id": "'"$uuid"'","email": "'"$user"'"}' /etc/xray/config.json
 
 sed -i '/#vlessgrpc$/a\### '"$user $exp"'\
 },{"id": "'"$uuid"'","email": "'"$user"'"}' /etc/xray/config.json
 
-# Simpan database user
+# Save user to database
 echo "$user $exp" >> /etc/xray/vless-user
 
 # ==========================================
-# Generate Vless link
+# Generate VLESS links
 vlesslink1="vless://${uuid}@${domain}:${tls}?path=/vless&security=tls&encryption=none&type=ws&sni=${domain}#${user}"
 vlesslink2="vless://${uuid}@${domain}:${none}?path=/vless&encryption=none&type=ws#${user}"
 vlesslink3="vless://${uuid}@${domain}:${tls}?mode=gun&security=tls&encryption=none&type=grpc&serviceName=vless-grpc&sni=${domain}#${user}"
@@ -75,30 +79,30 @@ vlesslink3="vless://${uuid}@${domain}:${tls}?mode=gun&security=tls&encryption=no
 systemctl restart xray
 
 # ==========================================
-# Output Info
+# Output Account Info
 clear
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/log-create-vless.log
-echo -e "\E[44;1;39m          Vless Account            \E[0m" | tee -a /etc/log-create-vless.log
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/log-create-vless.log
-echo -e "Remarks        : ${user}" | tee -a /etc/log-create-vless.log
+echo -e "${red}=========================================${nc}" | tee -a /etc/log-create-vless.log
+echo -e "${blue}            VLESS Account Info           ${nc}" | tee -a /etc/log-create-vless.log
+echo -e "${red}=========================================${nc}" | tee -a /etc/log-create-vless.log
+echo -e "Username       : ${user}" | tee -a /etc/log-create-vless.log
 echo -e "Domain         : ${domain}" | tee -a /etc/log-create-vless.log
-echo -e "Wildcard       : (bug.com).${domain}" | tee -a /etc/log-create-vless.log
+echo -e "Wildcard       : bug.com.${domain}" | tee -a /etc/log-create-vless.log
 echo -e "Port TLS       : $tls" | tee -a /etc/log-create-vless.log
-echo -e "Port none TLS  : $none" | tee -a /etc/log-create-vless.log
-echo -e "id             : ${uuid}" | tee -a /etc/log-create-vless.log
+echo -e "Port non-TLS   : $none" | tee -a /etc/log-create-vless.log
+echo -e "UUID           : ${uuid}" | tee -a /etc/log-create-vless.log
 echo -e "Encryption     : none" | tee -a /etc/log-create-vless.log
-echo -e "Network        : ws / grpc" | tee -a /etc/log-create-vless.log
+echo -e "Network        : ws/grpc" | tee -a /etc/log-create-vless.log
 echo -e "Path (WS)      : /vless" | tee -a /etc/log-create-vless.log
 echo -e "ServiceName    : vless-grpc" | tee -a /etc/log-create-vless.log
-echo -e "Link TLS       : ${vlesslink1}" | tee -a /etc/log-create-vless.log
-echo -e "Link none TLS  : ${vlesslink2}" | tee -a /etc/log-create-vless.log
-echo -e "Link gRPC      : ${vlesslink3}" | tee -a /etc/log-create-vless.log
+echo -e "VLESS TLS      : ${vlesslink1}" | tee -a /etc/log-create-vless.log
+echo -e "VLESS non-TLS  : ${vlesslink2}" | tee -a /etc/log-create-vless.log
+echo -e "VLESS gRPC     : ${vlesslink3}" | tee -a /etc/log-create-vless.log
 echo -e "Expired On     : $exp" | tee -a /etc/log-create-vless.log
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/log-create-vless.log
+echo -e "${red}=========================================${nc}" | tee -a /etc/log-create-vless.log
 echo "" | tee -a /etc/log-create-vless.log
 
 # ==========================================
-# Auto Expired Script
+# Auto Cleaner Script for Expired Accounts
 cat > /usr/local/bin/vless-cleaner <<'EOF'
 #!/bin/bash
 today=$(date +%Y-%m-%d)
@@ -120,12 +124,12 @@ EOF
 
 chmod +x /usr/local/bin/vless-cleaner
 
-# Buat cron job kalau belum ada
+# Create cron job if it doesn’t exist
 if [[ ! -f /etc/cron.d/vless-cleaner ]]; then
 cat > /etc/cron.d/vless-cleaner <<EOF
 0 0 * * * root /usr/local/bin/vless-cleaner >/dev/null 2>&1
 EOF
 fi
 
-read -n 1 -s -r -p "Press any key to back on menu"
+read -n 1 -s -r -p "Press any key to return to the menu..."
 m-vless

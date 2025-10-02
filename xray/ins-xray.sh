@@ -1,49 +1,49 @@
 #!/bin/bash
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
 # =========================================
-# pewarna hidup
-RED='\033[0;31m'
-NC='\033[0m'
-GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-# ==========================================
+# Name    : givps
+# Title   : Auto Script VPS For Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
+# =========================================
+
+# --- Colors ---
+red='\e[1;31m'    # Bright Red
+green='\e[0;32m'  # Green
+yellow='\e[1;33m' # Bright Yellow
+blue='\e[1;34m'   # Bright Blue
+nc='\e[0m'        # No Color (reset)
+
 # Getting
 MYIP=$(wget -qO- ipv4.icanhazip.com);
-echo "Checking VPS"
+echo -e "${green}Checking VPS...${nc}"
 clear
 domen=$(cat /etc/xray/domain)
 echo "$domen" > /root/domain
 domain=$(cat /root/domain)
 sleep 1
 mkdir -p /etc/xray 
-echo -e "[ ${green}INFO${NC} ] Checking... "
+echo -e "[ ${green}INFO${nc} ] Checking... "
 apt install iptables iptables-persistent -y
 sleep 1
-echo -e "[ ${green}INFO$NC ] Setting ntpdate"
+echo -e "[ ${green}INFO$nc ] Setting ntpdate"
 ntpdate pool.ntp.org 
 timedatectl set-ntp true
 sleep 1
-echo -e "[ ${green}INFO$NC ] Enable chronyd"
+echo -e "[ ${green}INFO$nc ] Enable chronyd"
 systemctl enable chronyd
 systemctl restart chronyd
 sleep 1
-echo -e "[ ${green}INFO$NC ] Enable chrony"
+echo -e "[ ${green}INFO$nc ] Enable chrony"
 systemctl enable chrony
 systemctl restart chrony
 timedatectl set-timezone Asia/Jakarta
 sleep 1
-echo -e "[ ${green}INFO$NC ] Setting chrony tracking"
+echo -e "[ ${green}INFO$nc ] Setting chrony tracking"
 chronyc sourcestats -v
 chronyc tracking -v
-echo -e "[ ${green}INFO$NC ] Setting dll"
+echo -e "[ ${green}INFO$nc ] Setting dll"
 apt clean all && apt update
 apt install curl socat xz-utils wget apt-transport-https gnupg gnupg2 gnupg1 dnsutils lsb-release -y 
 apt install socat cron bash-completion ntpdate -y
@@ -55,7 +55,7 @@ apt install curl pwgen openssl netcat cron -y
 
 # install xray
 sleep 1
-echo -e "[ ${green}INFO$NC ] Downloading & Installing xray core"
+echo -e "[ ${green}INFO$nc ] Downloading & Installing xray core"
 domainSock_dir="/run/xray";! [ -d $domainSock_dir ] && mkdir  $domainSock_dir
 chown www-data.www-data $domainSock_dir
 # Make Folder XRay
@@ -153,7 +153,7 @@ cat > /etc/xray/config.json << END
        },
        "streamSettings":{
            "network": "ws",
-           "wsSettings": { "path": "/trojan-ws" }
+           "wsSettings": { "path": "/trojan" }
          }
      },
     {
@@ -304,7 +304,7 @@ WantedBy=multi-user.target
 EOF
 cat > /etc/systemd/system/runn.service <<EOF
 [Unit]
-Description=Mantap-Sayang
+Description=Xray Service
 After=network.target
 
 [Service]
@@ -356,7 +356,7 @@ sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
 sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
 sed -i '$ i}' /etc/nginx/conf.d/xray.conf
 
-sed -i '$ ilocation = /trojan-ws' /etc/nginx/conf.d/xray.conf
+sed -i '$ ilocation = /trojan' /etc/nginx/conf.d/xray.conf
 sed -i '$ i{' /etc/nginx/conf.d/xray.conf
 sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
 sed -i '$ iproxy_pass http://127.0.0.1:25432;' /etc/nginx/conf.d/xray.conf
@@ -428,10 +428,10 @@ sed -i '$ igrpc_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
 sed -i '$ igrpc_pass grpc://127.0.0.1:30310;' /etc/nginx/conf.d/xray.conf
 sed -i '$ i}' /etc/nginx/conf.d/xray.conf
 
-echo -e "$yell[SERVICE]$NC Restart All service"
+echo -e "$yellow[SERVICE]$nc Restart All service"
 systemctl daemon-reload
 sleep 1
-echo -e "[ ${green}ok${NC} ] Enable & restart xray "
+echo -e "[ ${green}ok${nc} ] Enable & restart xray "
 systemctl daemon-reload
 systemctl enable xray
 systemctl restart xray
@@ -441,34 +441,35 @@ systemctl restart runn
 
 cd /usr/bin/
 # vmess
-wget -O add-ws "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/add-ws.sh" && chmod +x add-ws
-wget -O trialvmess "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/trialvmess.sh" && chmod +x trialvmess
-wget -O renew-ws "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/renew-ws.sh" && chmod +x renew-ws
-wget -O del-ws "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/del-ws.sh" && chmod +x del-ws
-wget -O cek-ws "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/cek-ws.sh" && chmod +x cek-ws
+wget -O add-ws "https://raw.githubusercontent.com/givps/givps/master/xray/add-ws.sh" && chmod +x add-ws
+wget -O trialvmess "https://raw.githubusercontent.com/givps/givps/master/xray/trialvmess.sh" && chmod +x trialvmess
+wget -O renew-ws "https://raw.githubusercontent.com/givps/givps/master/xray/renew-ws.sh" && chmod +x renew-ws
+wget -O del-ws "https://raw.githubusercontent.com/givps/givps/master/xray/del-ws.sh" && chmod +x del-ws
+wget -O cek-ws "https://raw.githubusercontent.com/givps/givps/master/xray/cek-ws.sh" && chmod +x cek-ws
 
 # vless
-wget -O add-vless "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/add-vless.sh" && chmod +x add-vless
-wget -O trialvless "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/trialvless.sh" && chmod +x trialvless
-wget -O renew-vless "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/renew-vless.sh" && chmod +x renew-vless
-wget -O del-vless "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/del-vless.sh" && chmod +x del-vless
-wget -O cek-vless "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/cek-vless.sh" && chmod +x cek-vless
+wget -O add-vless "https://raw.githubusercontent.com/givps/givps/master/xray/add-vless.sh" && chmod +x add-vless
+wget -O trialvless "https://raw.githubusercontent.com/givps/givps/master/xray/trialvless.sh" && chmod +x trialvless
+wget -O renew-vless "https://raw.githubusercontent.com/givps/givps/master/xray/renew-vless.sh" && chmod +x renew-vless
+wget -O del-vless "https://raw.githubusercontent.com/givps/givps/master/xray/del-vless.sh" && chmod +x del-vless
+wget -O cek-vless "https://raw.githubusercontent.com/givps/givps/master/xray/cek-vless.sh" && chmod +x cek-vless
 
 # trojan
-wget -O add-tr "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/add-tr.sh" && chmod +x add-tr
-wget -O trialtrojan "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/trialtrojan.sh" && chmod +x trialtrojan
-wget -O del-tr "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/del-tr.sh" && chmod +x del-tr
-wget -O renew-tr "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/renew-tr.sh" && chmod +x renew-tr
-wget -O cek-tr "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/cek-tr.sh" && chmod +x cek-tr
+wget -O add-tr "https://raw.githubusercontent.com/givps/givps/master/xray/add-tr.sh" && chmod +x add-tr
+wget -O trialtrojan "https://raw.githubusercontent.com/givps/givps/master/xray/trialtrojan.sh" && chmod +x trialtrojan
+wget -O del-tr "https://raw.githubusercontent.com/givps/givps/master/xray/del-tr.sh" && chmod +x del-tr
+wget -O renew-tr "https://raw.githubusercontent.com/givps/givps/master/xray/renew-tr.sh" && chmod +x renew-tr
+wget -O cek-tr "https://raw.githubusercontent.com/givps/givps/master/xray/cek-tr.sh" && chmod +x cek-tr
 
 # shadowsocks
-wget -O add-ssws "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/add-ssws.sh" && chmod +x add-ssws
-wget -O trialssws "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/trialssws.sh" && chmod +x trialssws
-wget -O del-ssws "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/del-ssws.sh" && chmod +x del-ssws
-wget -O renew-ssws "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/renew-ssws.sh" && chmod +x renew-ssws
+wget -O add-ssws "https://raw.githubusercontent.com/givps/givps/master/xray/add-ssws.sh" && chmod +x add-ssws
+wget -O trialssws "https://raw.githubusercontent.com/givps/givps/master/xray/trialssws.sh" && chmod +x trialssws
+wget -O del-ssws "https://raw.githubusercontent.com/givps/givps/master/xray/del-ssws.sh" && chmod +x del-ssws
+wget -O renew-ssws "https://raw.githubusercontent.com/givps/givps/master/xray/renew-ssws.sh" && chmod +x renew-ssws
+wget -O cek-ssws "https://raw.githubusercontent.com/givps/givps/master/xray/cek-ssws.sh" && chmod +x cek-ssws
 
 # xray cleaner
-wget -O xray-cleaner "https://raw.githubusercontent.com/givps/givps-1.0/master/xray/xray-cleaner.sh" && chmod +x xray-cleaner
+wget -O xray-cleaner "https://raw.githubusercontent.com/givps/givps/master/xray/xray-cleaner.sh" && chmod +x xray-cleaner
 
 sleep 1
 yellow() { echo -e "\\033[33;1m${*}\\033[0m"; }

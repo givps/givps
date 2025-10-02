@@ -1,19 +1,19 @@
 /*
  * Proxy Bridge (Cleaner Version)
  * Original Author: PANCHO7532 - P7COMUnications LLC (c) 2021
- * Modified by givps (2025)
+ * Modified by gilper0x
  */
 
 const net = require("net");
 
-// Default Config
-let dhost = "127.0.0.1";
-let dport = null;
-let mainPort = null;
-let packetsToSkip = 0;
-let gcwarn = true;
+// Default configuration
+let dhost = "127.0.0.1";    // Destination host
+let dport = null;            // Destination port
+let mainPort = null;         // Local listening port
+let packetsToSkip = 0;       // Number of initial packets to ignore
+let gcwarn = true;           // Garbage collector warning flag
 
-// Parse CLI Args
+// Parse command line arguments
 for (let c = 0; c < process.argv.length; c++) {
   switch (process.argv[c]) {
     case "-skip":
@@ -31,30 +31,30 @@ for (let c = 0; c < process.argv.length; c++) {
   }
 }
 
-// Validate args
+// Validate required arguments
 if (!dport || !mainPort) {
   console.error("[ERROR] Missing required arguments: -dport and -mport");
   process.exit(1);
 }
 
-// Garbage collector
+// Garbage collector function
 function gcollector() {
   if (global.gc) {
     global.gc();
   } else if (gcwarn) {
-    console.warn("[WARN] Garbage Collector not enabled! Start node with --expose-gc");
+    console.warn("[WARN] Garbage Collector not enabled! Start Node.js with --expose-gc");
     gcwarn = false;
   }
 }
-setInterval(gcollector, 10000); // setiap 10 detik saja, biar tidak spam
+setInterval(gcollector, 10000); // Run every 10 seconds to avoid spam
 
-// Proxy Server
+// Proxy server
 const server = net.createServer((socket) => {
   let packetCount = 0;
 
   console.log(`[INFO] Connection from ${socket.remoteAddress}:${socket.remotePort}`);
 
-  // Write handshake (fake HTTP upgrade)
+  // Send handshake (fake HTTP upgrade)
   socket.write(
     "HTTP/1.1 101 Switching Protocols\r\nContent-Length: 1048576000000\r\n\r\n",
     (err) => {
@@ -65,7 +65,7 @@ const server = net.createServer((socket) => {
   // Connect to remote host
   const conn = net.createConnection({ host: dhost, port: dport });
 
-  // Data from client → remote
+  // Client → Remote
   socket.on("data", (data) => {
     if (packetCount < packetsToSkip) {
       packetCount++;
@@ -76,7 +76,7 @@ const server = net.createServer((socket) => {
     });
   });
 
-  // Data from remote → client
+  // Remote → Client
   conn.on("data", (data) => {
     socket.write(data, (err) => {
       if (err) console.error("[EWRITE] Failed remote→client:", err.message);
@@ -108,6 +108,7 @@ server.on("error", (err) => {
   console.error("[SRV] Error:", err.message);
 });
 
+// Start listening
 server.listen(mainPort, () => {
   console.log(`[INFO] Proxy listening on port ${mainPort}`);
   console.log(`[INFO] Redirecting traffic to ${dhost}:${dport}`);

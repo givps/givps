@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <!--
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 -->
 <html lang="en">
@@ -17,7 +18,7 @@
 	<title>
 		Auto Script VPS For Create VPN on Debian & Ubuntu Server
 	</title>
-	  <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/givps/givps/refs/heads/main/favicon/favicon.ico">
+	  <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/givps/favicon/refs/heads/main/favicon.ico">
 	<style>
 		body {
 			padding: 25px;
@@ -50,7 +51,7 @@
         <div class="footer">
             <footer>
 		<p align="center">
-            <a href="https://github.com/givps/givps-1.0" target="_blank"><img src="https://img.shields.io/badge/source-repo-blue"></a>
+            <a href="https://github.com/givps" target="_blank"><img src="https://img.shields.io/badge/github-blue"></a>
 			<a href="https://t.me/givps_com" target="_blank"><img src="https://img.shields.io/badge/telegram-blue"></a>
 			    </p>
             </footer>

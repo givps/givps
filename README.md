@@ -24,7 +24,7 @@
 - (Recommendation) Ubuntu 18 / 20 LTS (STABLE to use)
 <br>
 
-# Cloudflare settings for those who have their own Domain, you can check at folder [image](https://github.com/givps/givps-1.0/tree/master/image) to display other settings
+# Cloudflare settings for those who have their own Domain, you can check at folder [image](https://github.com/givps/givps/tree/master/image) to display other settings
 <br>
 - SSL/TLS : FULL<br>
 - SSL/TLS Recommender : OFF<br>
@@ -35,7 +35,7 @@
 <br>
 
 # Pointing
-![Pointing](https://raw.githubusercontent.com/givps/givps-1.0/master/image/pointing.png)
+![Pointing](https://raw.githubusercontent.com/givps/givps/master/image/pointing.png)
 
 ## Service & Port:
 <br>
@@ -69,14 +69,14 @@
 - BBRPLUS
 - DNS CHANGER
 - Additional Features (Optional) skipper (NOTE) install after [Step Install] is complete
-- Optional [install Slowdns + UDP-Custom + OpenVPN](https://github.com/givps/givps-1.0/tree/master/udp-custom)
-- Optional [install Panel Webmin](https://github.com/givps/givps-1.0/tree/master/webmin)
+- Optional [install Slowdns + UDP-Custom + OpenVPN](https://github.com/givps/givps/tree/master/udp-custom)
+- Optional [install Panel Webmin](https://github.com/givps/givps/tree/master/webmin)
   
 # Menu
-![Service Status](https://raw.githubusercontent.com/givps/givps-1.0/master/image/menu.png)
+![Service Status](https://raw.githubusercontent.com/givps/givps/master/image/menu.png)
 
 # Service Status
-![Service Status](https://raw.githubusercontent.com/givps/givps-1.0/master/image/service.png)
+![Service Status](https://raw.githubusercontent.com/givps/givps/master/image/service.png)
 
 # [Step Install]
 - Step 1 for (debian) please update first
@@ -85,7 +85,7 @@ apt update && apt upgrade -y && reboot
 ```
 - Step 2 for (ubuntu) directly install
 ```
-sysctl -w net.ipv6.conf.all.disable_ipv6=1 && sysctl -w net.ipv6.conf.default.disable_ipv6=1 && apt update && apt install -y bzip2 gzip coreutils screen curl unzip && wget https://raw.githubusercontent.com/givps/givps-1.0/master/setup.sh && chmod +x setup.sh && sed -i -e 's/\r$//' setup.sh && screen -S setup ./setup.sh
+sysctl -w net.ipv6.conf.all.disable_ipv6=1 && sysctl -w net.ipv6.conf.default.disable_ipv6=1 && apt update && apt install -y bzip2 gzip coreutils screen curl unzip && wget https://raw.githubusercontent.com/givps/givps/master/setup.sh && chmod +x setup.sh && sed -i -e 's/\r$//' setup.sh && screen -S setup ./setup.sh
 ```
 
 # Telegram
@@ -101,7 +101,7 @@ sysctl -w net.ipv6.conf.all.disable_ipv6=1 && sysctl -w net.ipv6.conf.default.di
 # FINAL MESSAGE
 - THANK YOU FOR TAKING THE TIME TO READ AND SORRY IF THERE ARE IMPACT WORDS
 - BECAUSE I AM ALSO A HUMAN WHO DOESN'T ESCAPE FROM MISTAKES
-- if you find an error, create a trouble ticket on https://github.com/givps/givps-1.0/issues
+- if you find an error, create a trouble ticket on https://github.com/givps/givps/issues
 
 <p align="center">
 <a href="https://opensource.org/licenses/MIT"> <img src="https://img.shields.io/badge/License-MIT-yellow.svg" style="max-width:200%;"></a>

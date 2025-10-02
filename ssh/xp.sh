@@ -1,14 +1,16 @@
 #!/bin/bash
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
+# =========================================
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
 LOG_FILE="/var/log/autoremove.log"
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo "[$(date)] Starting auto-remove on VPS $MYIP" | tee -a $LOG_FILE
+echo "[$(date)] Starting auto-remove process on VPS $MYIP" | tee -a $LOG_FILE
 clear
 now=$(date +"%Y-%m-%d")
 
@@ -19,11 +21,11 @@ for user in $users_vmess; do
     [[ -z "$exp" ]] && continue
     d1=$(date -d "$exp" +%s)
     d2=$(date -d "$now" +%s)
-    exp2=$(( (d1 - d2) / 86400 ))
-    if [[ $exp2 -le 0 ]]; then
+    days_left=$(( (d1 - d2) / 86400 ))
+    if [[ $days_left -le 0 ]]; then
         sed -i "/^### $user $exp/,/^},{/d" /etc/xray/config.json
         rm -f /etc/xray/$user-tls.json /etc/xray/$user-none.json
-        echo "[$(date)] Deleted expired Vmess user: $user (expired $exp)" | tee -a $LOG_FILE
+        echo "[$(date)] Removed expired Vmess user: $user (expired $exp)" | tee -a $LOG_FILE
     fi
 done
 
@@ -34,10 +36,10 @@ for user in $users_vless; do
     [[ -z "$exp" ]] && continue
     d1=$(date -d "$exp" +%s)
     d2=$(date -d "$now" +%s)
-    exp2=$(( (d1 - d2) / 86400 ))
-    if [[ $exp2 -le 0 ]]; then
+    days_left=$(( (d1 - d2) / 86400 ))
+    if [[ $days_left -le 0 ]]; then
         sed -i "/^#& $user $exp/,/^},{/d" /etc/xray/config.json
-        echo "[$(date)] Deleted expired Vless user: $user (expired $exp)" | tee -a $LOG_FILE
+        echo "[$(date)] Removed expired Vless user: $user (expired $exp)" | tee -a $LOG_FILE
     fi
 done
 
@@ -48,25 +50,25 @@ for user in $users_trojan; do
     [[ -z "$exp" ]] && continue
     d1=$(date -d "$exp" +%s)
     d2=$(date -d "$now" +%s)
-    exp2=$(( (d1 - d2) / 86400 ))
-    if [[ $exp2 -le 0 ]]; then
+    days_left=$(( (d1 - d2) / 86400 ))
+    if [[ $days_left -le 0 ]]; then
         sed -i "/^#! $user $exp/,/^},{/d" /etc/xray/config.json
-        echo "[$(date)] Deleted expired Trojan user: $user (expired $exp)" | tee -a $LOG_FILE
+        echo "[$(date)] Removed expired Trojan user: $user (expired $exp)" | tee -a $LOG_FILE
     fi
 done
 
-# Restart Xray setelah perubahan
+# Restart Xray after modifications
 systemctl restart xray
 echo "[$(date)] Restarted Xray service" | tee -a $LOG_FILE
 
-# ============= Auto Remove SSH =============
+# ============= Auto Remove SSH Users =============
 today=$(date +%s)
 while IFS=: read -r username _ _ _ _ _ _ expire; do
     [[ -z "$expire" || "$expire" == "" ]] && continue
     expire_seconds=$((expire * 86400))
     if [[ $expire_seconds -lt $today ]]; then
         userdel --force "$username" 2>/dev/null
-        echo "[$(date)] Deleted expired SSH user: $username" | tee -a $LOG_FILE
+        echo "[$(date)] Removed expired SSH user: $username" | tee -a $LOG_FILE
     fi
 done < /etc/shadow
 

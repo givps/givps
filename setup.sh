@@ -1,13 +1,19 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.1 (Improved)
-# Author  : givps
-# License : MIT
+# Name    : givps
+# Title   : Auto Script VPS For Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
 # --- Colors ---
-red='\e[1;31m'; green='\e[0;32m'; yellow='\e[1;33m'; blue='\e[1;34m'; nc='\e[0m'
+red='\e[1;31m'    # Bright Red
+green='\e[0;32m'  # Green
+yellow='\e[1;33m' # Bright Yellow
+blue='\e[1;34m'   # Bright Blue
+nc='\e[0m'        # No Color (reset)
 
 # --- Root Check ---
 if [ "${EUID}" -ne 0 ]; then
@@ -31,8 +37,8 @@ fi
 
 # --- Folder Preparation ---
 mkdir -p /etc/xray /etc/v2ray
-touch /etc/xray/{domain,scdomain}
-touch /etc/v2ray/{domain,scdomain}
+touch /etc/xray/domain
+touch /etc/v2ray/domain
 
 # --- Kernel Headers Check ---
 kernel_version=$(uname -r)
@@ -46,13 +52,16 @@ if ! dpkg -s "$headers_pkg" >/dev/null 2>&1; then
     }
 fi
 
-# --- Timezone & IPv6 ---
+# --- Timezone & IPv6 Disable ---
 ln -fs /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
 sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1
 sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1
 
 # --- Basic Tools ---
 apt install -y git curl wget python3 socat >/dev/null 2>&1
+
+# --- Get VPS public IP ---
+IP=$(curl -s ipv4.icanhazip.com || wget -qO- ipv4.icanhazip.com)
 
 # --- Domain Setup ---
 clear
@@ -62,11 +71,11 @@ echo "2) Use Your Own Domain"
 read -rp "Choose [1/2]: " dns
 
 if [[ "$dns" == "1" ]]; then
-    wget -q https://raw.githubusercontent.com/givps/AutoScriptXray/master/ssh/cf \
+    wget -q https://raw.githubusercontent.com/givps/givps/master/ssh/cf \
       -O /root/cf && chmod +x /root/cf && bash /root/cf
 elif [[ "$dns" == "2" ]]; then
     read -rp "Enter Your Domain : " dom
-    echo "$dom" | tee /root/domain /root/scdomain /etc/xray/{domain,scdomain} /etc/v2ray/{domain,scdomain} >/dev/null
+    echo "$dom" | tee /root/domain /etc/xray/domain /etc/v2ray/domain >/dev/null
     echo "IP=$dom" > /var/lib/ipvps.conf
 else
     echo -e "${red}Invalid choice.${nc}"
@@ -84,13 +93,13 @@ certbot --nginx --non-interactive --agree-tos -m admin@$domain -d $domain || {
 }
 
 # --- Install Services ---
-wget -q https://raw.githubusercontent.com/givps/AutoScriptXray/master/ssh/ssh-vpn.sh \
+wget -q https://raw.githubusercontent.com/givps/givps/master/ssh/ssh-vpn.sh \
   -O /root/ssh-vpn.sh && chmod +x /root/ssh-vpn.sh && bash /root/ssh-vpn.sh
 
-wget -q https://raw.githubusercontent.com/givps/AutoScriptXray/master/xray/ins-xray.sh \
+wget -q https://raw.githubusercontent.com/givps/givps/master/xray/ins-xray.sh \
   -O /root/ins-xray.sh && chmod +x /root/ins-xray.sh && bash /root/ins-xray.sh
 
-wget -q https://raw.githubusercontent.com/givps/AutoScriptXray/master/sshws/insshws.sh \
+wget -q https://raw.githubusercontent.com/givps/givps/master/sshws/insshws.sh \
   -O /root/insshws.sh && chmod +x /root/insshws.sh && bash /root/insshws.sh
 
 # --- Auto Profile ---
@@ -114,15 +123,21 @@ echo "============================================================" | tee -a log
 echo "   Installation Finished!" | tee -a log-install.txt
 echo "   Domain     : $domain" | tee -a log-install.txt
 echo "   Public IP  : $ip_public" | tee -a log-install.txt
-echo "   SSL        : Installed via Certbot" | tee -a log-install.txt
 echo "============================================================" | tee -a log-install.txt
-echo "   OpenSSH      : 22" | tee -a log-install.txt
-echo "   Websocket    : 80 / 443" | tee -a log-install.txt
-echo "   Stunnel4     : 222, 777" | tee -a log-install.txt
-echo "   Nginx        : 81" | tee -a log-install.txt
-echo "   Vmess/Vless  : 80, 443, gRPC" | tee -a log-install.txt
-echo "   Trojan       : 80, 443, gRPC" | tee -a log-install.txt
-echo "   Shadowsocks  : 80, 443, gRPC" | tee -a log-install.txt
+echo "   >>> Service & Port"  | tee -a log-install.txt
+echo "============================================================" | tee -a log-install.txt
+echo " - OpenSSH      : 22, 110" | tee -a log-install.txt
+echo " - Websocket    : 80, 443" | tee -a log-install.txt
+echo " - Stunnel4     : 222, 777" | tee -a log-install.txt
+echo " - Dropbear     : 109, 143" | tee -a log-install.txt
+echo " - Badvpn       : 7100-7900" | tee -a log-install.txt
+echo " - Nginx        : 81" | tee -a log-install.txt
+echo " - Vless        : 80, 443, gRPC" | tee -a log-install.txt
+echo " - Vmess        : 80, 443, gRPC" | tee -a log-install.txt
+echo " - Trojan       : 80, 443, gRPC" | tee -a log-install.txt
+echo " - Shadowsocks  : 80, 443, gRPC" | tee -a log-install.txt
+echo " - TLS          : 443" | tee -a log-install.txt
+echo " - noneTLS      : 80" | tee -a log-install.txt
 echo "============================================================" | tee -a log-install.txt
 echo "Server will reboot in 10 seconds..."
 sleep 10

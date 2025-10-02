@@ -1,55 +1,56 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# License : MIT
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
+# --- Colors ---
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
+
+# Detect VPS Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo "Checking VPS..."
-sleep 1
 clear
 
-# Warna
-Green="\033[32m"
-Red="\033[31m"
-Yellow="\033[33m"
-Blue="\033[36m"
-Reset="\033[0m"
-
 # ===== SHADOWSOCKS MENU =====
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
-echo -e "\E[0;100;33m       • SHADOWSOCKS MENU •        \E[0m"
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}       • SHADOWSOCKS MENU •        ${nc}"
+echo -e "${red}=========================================${nc}"
 echo ""
-echo -e " [${Blue}1${Reset}] Create Shadowsocks Account"
-echo -e " [${Blue}2${Reset}] Create Trial Shadowsocks"
-echo -e " [${Blue}3${Reset}] Extend Shadowsocks Account"
-echo -e " [${Blue}4${Reset}] Delete Shadowsocks Account"
-echo -e " [${Blue}5${Reset}] List Created Accounts"
+echo -e " [${blue}1${nc}] Create Shadowsocks Account"
+echo -e " [${blue}2${nc}] Create Trial Shadowsocks Account"
+echo -e " [${blue}3${nc}] Extend Shadowsocks Account"
+echo -e " [${blue}4${nc}] Delete Shadowsocks Account"
+echo -e " [${blue}5${nc}] Check Shadowsocks Logins"
+echo -e " [${blue}6${nc}] List Created Shadowsocks Accounts"
 echo ""
-echo -e " [${Red}0${Reset}] Back to Main Menu"
+echo -e " [${red}0${nc}] Back to Main Menu"
 echo -e " [x] Exit"
 echo ""
-echo -e "${Yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${Reset}"
+echo -e "${red}=========================================${nc}"
 echo ""
 
-read -rp " Select menu : " opt
+read -rp " Select an option: " opt
 echo ""
 
 case $opt in
-    1) clear ; add-ssws ;;                       # Create Account
-    2) clear ; trialssws ;;                      # Trial Account
-    3) clear ; renew-ssws ;;                     # Extend Account
-    4) clear ; del-ssws ;;                       # Delete Account
-    5) clear ; cat /etc/log-create-shadowsocks.log ;;  # Show User List
-    0) clear ; menu ;;                           # Back to Menu
-    x|X) exit 0 ;;                               # Exit
+    1) clear ; add-ssws ;;                       # Create account
+    2) clear ; trialssws ;;                      # Create trial account
+    3) clear ; renew-ssws ;;                     # Extend account
+    4) clear ; del-ssws ;;                       # Delete account
+    5) clear ; cek-ssws ;;                       # Check logins
+    6) clear ; cat /etc/log-create-shadowsocks.log ;;  # Show created accounts
+    0) clear ; menu ;;                           # Back to main menu
+    x|X) exit 0 ;;                               # Exit script
     *) 
-        echo -e "${Red}[Error]${Reset} Invalid option!"
+        echo -e "${red}[Error]${nc} Invalid option!"
         sleep 1
-        m-ssws
-        ;;
+        m-ssws ;;                                # Reload Shadowsocks menu
 esac

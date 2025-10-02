@@ -1,48 +1,46 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# License : MIT
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
-# Warna
-RED='\033[0;31m'
-NC='\033[0m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-YELLOW='\033[0;33m'
-WHITE='\033[1;37m'
+# --- Colors ---
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
 
-# Ambil IP VPS
+# Detect VPS Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo "Checking VPS..."
-sleep 1
 clear
 
 dnsfile="/root/dns"
 
 # Header
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${WHITE}              DNS CHANGER${NC}"
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}              DNS CHANGER${nc}"
+echo -e "${red}=========================================${nc}"
 
-# Cek DNS aktif
+# Check active DNS
 if [[ -f "$dnsfile" ]]; then
     udns=$(cat "$dnsfile")
-    echo -e "\n Active DNS : ${CYAN}$udns${NC}"
+    echo -e "\n Active DNS : ${blue}$udns${nc}"
 fi
 
 echo -e ""
-echo -e " [${CYAN}1${NC}] Change DNS (example: 1.1.1.1)"
-echo -e " [${CYAN}2${NC}] Reset DNS to Google (8.8.8.8)"
-echo -e " [${CYAN}3${NC}] Reboot after update DNS"
+echo -e " [${blue}1${nc}] Change DNS (example: 1.1.1.1)"
+echo -e " [${blue}2${nc}] Reset DNS to Google (8.8.8.8)"
+echo -e " [${blue}3${nc}] Reboot after updating DNS"
 echo -e ""
-echo -e " [${RED}0${NC}] Back To System Menu"
+echo -e " [${red}0${nc}] Back To System Menu"
 echo -e " [x] Exit"
 echo -e ""
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${red}=========================================${nc}"
 echo -e ""
 
 read -rp " Select option [0-3]: " dns
@@ -51,9 +49,9 @@ echo ""
 case $dns in
 1)
     clear
-    read -rp " Please insert DNS (IP only): " dns1
+    read -rp " Please enter DNS (IP only): " dns1
     if [[ -z "$dns1" ]]; then
-        echo -e "${RED}Error:${NC} DNS cannot be empty!"
+        echo -e "${red}Error:${nc} DNS cannot be empty!"
         sleep 2
         exec "$0"
     fi
@@ -66,7 +64,7 @@ case $dns in
 
     systemctl restart resolvconf.service 2>/dev/null
 
-    echo -e "\n${GREEN}Success:${NC} DNS $dns1 applied to VPS"
+    echo -e "\n${green}Success:${nc} DNS $dns1 applied to VPS"
     cat /etc/resolvconf/resolv.conf.d/head
     sleep 2
     exec "$0"
@@ -79,11 +77,11 @@ case $dns in
             rm -f "$dnsfile"
             echo "nameserver 8.8.8.8" > /etc/resolv.conf
             echo "nameserver 8.8.8.8" > /etc/resolvconf/resolv.conf.d/head
-            echo -e "\n${GREEN}INFO:${NC} DNS reset to Google (8.8.8.8)"
+            echo -e "\n${green}INFO:${nc} DNS reset to Google (8.8.8.8)"
             sleep 2
             ;;
         n|N|*)
-            echo -e "\n${YELLOW}INFO:${NC} Operation cancelled by user."
+            echo -e "\n${yellow}INFO:${nc} Operation cancelled by user."
             sleep 2
             ;;
     esac
@@ -91,7 +89,7 @@ case $dns in
     ;;
 3)
     clear
-    echo -e "${GREEN}INFO:${NC} Rebooting system..."
+    echo -e "${green}INFO:${nc} Rebooting system..."
     sleep 2
     reboot
     ;;
@@ -103,7 +101,7 @@ x|X)
     exit 0
     ;;
 *)
-    echo -e "${RED}Error:${NC} Invalid option!"
+    echo -e "${red}Error:${nc} Invalid option!"
     sleep 2
     exec "$0"
     ;;

@@ -1,40 +1,46 @@
 #!/bin/bash
 # =========================================
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
+# Name    : givps
+# Title   : Auto VPS Script to Update Menu and Clear RAM Cache on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
 
-# Warna
-GREEN='\e[1;32m'
-NC='\e[0m'
+# --- Colors ---
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
 
+# Detect VPS Public IP
+MYIP=$(wget -qO- ipv4.icanhazip.com)
 clear
 cd
 
-# Bersihkan file lama
+# Remove old files
 rm -f debian.sh
 rm -f /usr/bin/clearcache
 rm -f /usr/bin/menu
 
-# Info update
-echo -e "${GREEN}Updating menu...${NC}"
+# Update info
+echo -e "${blue}Updating menu...${nc}"
 sleep 1
 
-# Download file terbaru
-wget -q -O /usr/bin/clearcache "https://raw.githubusercontent.com/givps/givps-1.0/master/menu/clearcache.sh"
-wget -q -O /usr/bin/menu "https://raw.githubusercontent.com/givps/givps-1.0/master/menu/menu.sh"
+# Download latest files
+wget -q -O /usr/bin/clearcache "https://raw.githubusercontent.com/givps/givps/master/menu/clearcache.sh"
+wget -q -O /usr/bin/menu "https://raw.githubusercontent.com/givps/givps/master/menu/menu.sh"
 
-# Beri izin eksekusi
+# Set execution permissions
 chmod +x /usr/bin/clearcache
 chmod +x /usr/bin/menu
 
-# Hapus sisa file
+# Remove leftover files
 rm -f debian.sh
 
-# Info reboot
-echo -e "${GREEN}Auto rebooting in 5 seconds...${NC}"
+# Reboot info
+echo -e "${blue}Auto rebooting in 5 seconds...${nc}"
 sleep 5
 reboot

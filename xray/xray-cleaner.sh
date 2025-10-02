@@ -1,12 +1,23 @@
 #!/bin/bash
 # =========================================
-# Xray Universal Auto-Cleaner Installer
-# Author  : givps
+# Name    : givps
+# Title   : Auto Script VPS For Create VPN on Debian & Ubuntu Server
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
 # =========================================
+
+# --- Colors ---
+red='\e[1;31m'    # Bright Red
+green='\e[0;32m'  # Green
+yellow='\e[1;33m' # Bright Yellow
+blue='\e[1;34m'   # Bright Blue
+nc='\e[0m'        # No Color (reset)
 
 CLEANER_PATH="/usr/local/bin/xray-cleaner"
 
-# Buat script cleaner
+# Create cleaner script
 cat > $CLEANER_PATH <<'EOF'
 #!/bin/bash
 # =========================================
@@ -17,14 +28,14 @@ cat > $CLEANER_PATH <<'EOF'
 CONFIG="/etc/xray/config.json"
 TODAY=$(date +%s)
 
-# scan marker ### username exp
+# Scan marker ### username exp
 grep -E "^### " $CONFIG | while read -r marker; do
     USER=$(echo $marker | awk '{print $2}')
     EXP=$(echo $marker | awk '{print $3}')
     EXP_TS=$(date -d "$EXP" +%s)
 
     if [[ $EXP_TS -le $TODAY ]]; then
-        # hapus semua block user expired
+        # Remove all expired user blocks
         sed -i "/^### $USER $EXP/,/^},{/d" $CONFIG
         echo "Expired user removed: $USER ($EXP)"
     fi
@@ -36,13 +47,13 @@ EOF
 # Set permission
 chmod +x $CLEANER_PATH
 
-# Pasang cron job
+# Install cron job
 CRON_FILE="/etc/cron.d/xray-cleaner"
 cat > $CRON_FILE <<EOF
 */30 * * * * root $CLEANER_PATH >/dev/null 2>&1
 EOF
 
-echo "✅ Xray Universal Auto-Cleaner terpasang!"
+echo -e "${green}✅ Xray Universal Auto-Cleaner installed!${nc}"
 echo "➡ Script : $CLEANER_PATH"
-echo "➡ Cron   : $CRON_FILE (jalan tiap 30 menit)"
+echo "➡ Cron   : $CRON_FILE (runs every 30 minutes)"
 sleep 5

@@ -1,74 +1,79 @@
 #!/bin/bash
-# Quick Setup | Script Setup Manager
-# Edition : Stable Edition 1.0
-# Author  : givps
-# The MIT License (MIT)
-# (C) Copyright 2023
 # =========================================
-# pewarna hidup
-RED='\033[0;31m'
-NC='\033[0m'
-GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-# ==========================================
-# Getting
-MYIP=$(wget -qO- ipv4.icanhazip.com);
-echo "Checking VPS..."
+# Name    : givps
+# Title   : Auto Script VPS - Renew VMESS Account
+# Version : 1.0
+# Author  : gilper0x
+# Website : https://givps.com
+# License : The MIT License (MIT)
+# =========================================
+
+# --- Colors ---
+red='\e[1;31m'    # Bright Red
+green='\e[0;32m'  # Green
+yellow='\e[1;33m' # Bright Yellow
+blue='\e[1;34m'   # Bright Blue
+nc='\e[0m'        # No Color (reset)
+
+# --- Get VPS IP ---
+MYIP=$(wget -qO- ipv4.icanhazip.com)
+echo -e "${green}Checking VPS...${nc}"
 clear
 
+# --- Check Existing Clients ---
 NUMBER_OF_CLIENTS=$(grep -c -E "^### " "/etc/xray/config.json")
 if [[ ${NUMBER_OF_CLIENTS} == '0' ]]; then
     clear
-    echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo -e "\E[44;1;39m          ⇱ Renew VMESS ⇲           \E[0m"
-    echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    echo -e "${red}=========================================${nc}"
+    echo -e "${blue}          ⇱ RENEW VMESS ⇲           ${nc}"
+    echo -e "${red}=========================================${nc}"
     echo ""
     echo "  • You have no existing VMESS clients!"
     echo ""
-    echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    read -n 1 -s -r -p "   Press any key to back on menu"
+    echo -e "${red}=========================================${nc}"
+    read -n 1 -s -r -p "   Press any key to return to menu"
     m-vmess
 fi
 
+# --- Show Clients ---
 clear
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "\E[44;1;39m          ⇱ Renew VMESS ⇲           \E[0m"
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}          ⇱ RENEW VMESS ⇲           ${nc}"
+echo -e "${red}=========================================${nc}"
 echo ""
 grep -E "^### " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | column -t | sort | uniq
 echo ""
-echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "${red}=========================================${nc}"
 read -rp "   Input Username : " user
 
 if [[ -z "$user" ]]; then
     m-vmess
 else
-    read -rp "   Expired (days): " masaaktif
+    read -rp "   Extend (days) : " expired
+
+    # Get current expiration date
     exp=$(grep -wE "^### $user" "/etc/xray/config.json" | cut -d ' ' -f 3 | sort | uniq)
     now=$(date +%Y-%m-%d)
     d1=$(date -d "$exp" +%s)
     d2=$(date -d "$now" +%s)
     exp2=$(( (d1 - d2) / 86400 ))
-    exp3=$((exp2 + masaaktif))
+    exp3=$((exp2 + expired))
     exp4=$(date -d "$exp3 days" +"%Y-%m-%d")
 
     # Update config
     sed -i "/### $user/c\### $user $exp4" /etc/xray/config.json
     systemctl restart xray > /dev/null 2>&1
 
+    # --- Result ---
     clear
-    echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo "   VMESS Account Was Successfully Renewed"
-    echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    echo -e "${red}=========================================${nc}"
+    echo "   VMESS Account Has Been Successfully Renewed"
+    echo -e "${red}=========================================${nc}"
     echo ""
     echo "   • Client Name : $user"
     echo "   • Expired On  : $exp4"
     echo ""
-    echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    read -n 1 -s -r -p "   Press any key to back on menu"
+    echo -e "${red}=========================================${nc}"
+    read -n 1 -s -r -p "   Press any key to return to menu"
     m-vmess
 fi
