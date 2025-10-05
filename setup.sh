@@ -2,7 +2,7 @@
 # =================================================================
 # Name    : vpn-installer-core
 # Title   : Auto Script VPS Installation Core for Multi-Protocol VPN
-# Version : 1.1 (Robustness and Security Review)
+# Version : 1.2 (Line-Ending Fix & Robustness)
 # Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
@@ -31,7 +31,7 @@ warn_continue() {
     echo -e "${yellow}[WARN]${nc} $1"
 }
 
-# --- Initial Checks ---
+# --- Initial Checks & Cleanup ---
 
 # Root Check
 if [ "${EUID}" -ne 0 ]; then
@@ -42,6 +42,10 @@ fi
 if [ "$(systemd-detect-virt)" == "openvz" ]; then
     error_exit "OpenVZ is not supported. Please use KVM/VMware based VPS."
 fi
+
+# Fix potential Windows line endings on the main script itself
+# This prevents: : invalid option name` or `$'\r'` errors.
+sed -i 's/\r$//' "$0" 2>/dev/null || true
 
 # --- Hostname Fix ---
 localip=$(hostname -I | awk '{print $1}')
@@ -66,7 +70,6 @@ sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1
 
 # --- Basic Tools & Dependencies ---
 echo -e "${blue}Installing basic tools and dependencies...${nc}"
-# Note: Adding `nginx` here to ensure it's available before Certbot step
 apt update -y
 apt install -y git curl wget python3 socat nginx certbot python3-certbot-nginx || error_exit "Failed to install core packages."
 
@@ -97,7 +100,12 @@ if [[ "$dns" == "1" ]]; then
     # WARNING: HIGH SECURITY RISK - DOWNLOADING UNVERIFIED CF SCRIPT
     echo -e "${yellow}Downloading and executing external Cloudflare script...${nc}"
     wget -q https://raw.githubusercontent.com/givps/givps/master/ssh/cf -O /root/cf || error_exit "Failed to download cf script."
+    
+    # === FIX: Clean Windows line endings from the downloaded script ===
+    sed -i 's/\r$//' /root/cf 2>/dev/null || warn_continue "Could not run sed to fix line endings on /root/cf."
+    
     chmod +x /root/cf
+    # Note: If the script fails here, it is likely due to missing environment variables (token/zone ID)
     bash /root/cf || error_exit "Cloudflare script failed. Check API key/zone ID."
     DOMAIN=$(cat /root/domain 2>/dev/null || echo "")
 elif [[ "$dns" == "2" ]]; then
@@ -126,7 +134,7 @@ echo -e "${green}Installing SSL Certificate for $DOMAIN...${nc}"
 
 # IMPORTANT: Use Certbot staging environment for testing to avoid rate limits
 # Remove --staging when ready for production
-if ! certbot --nginx --non-interactive --agree-tos --email admin@$DOMAIN -d $DOMAIN; then
+if ! certbot --nginx --non-interactive --agree-tos --email admin@"$DOMAIN" -d "$DOMAIN"; then
     error_exit "Certbot failed to obtain SSL certificate for $DOMAIN. Check DNS/Firewall."
 fi
 echo -e "${green}SSL Certificate installed successfully.${nc}"
@@ -144,7 +152,10 @@ for service_name in "${!external_scripts[@]}"; do
     script_url="${external_scripts[$service_name]}"
     script_path="/root/$service_name.sh"
     echo -e "${yellow}Downloading ${service_name} script from $script_url...${nc}"
-    if wget -q "$script_url" -O "$script_path"; then
+    if wget -q "${script_url//\\e\[*;}" -O "$script_path"; then # Strip color codes from URL
+        # Fix line endings on external scripts too
+        sed -i 's/\r$//' "$script_path" 2>/dev/null || warn_continue "Could not fix line endings on $script_path."
+
         chmod +x "$script_path"
         echo -e "${green}Executing ${service_name} script...${nc}"
         if ! bash "$script_path"; then
