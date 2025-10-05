@@ -1,12 +1,16 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
-# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
-# Version : 1.0
-# Author  : gilper0x
+# Name    : bw-monitor-menu
+# Title   : Interactive Menu for Bandwidth Monitoring (vnstat wrapper)
+# Version : 1.1 (Robustness and Flow Fixes)
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
+
+# --- Configuration ---
+# Exit immediately if a command exits with a non-zero status or unset variable.
+set -euo pipefail
 
 # --- Colors ---
 red='\e[1;31m'
@@ -15,178 +19,115 @@ yellow='\e[1;33m'
 blue='\e[1;34m'
 nc='\e[0m'
 
-# Detect VPS Public IP
-MYIP=$(wget -qO- ipv4.icanhazip.com)
-clear
+# --- Pre-check: Ensure vnstat is installed ---
+if ! command -v vnstat &> /dev/null; then
+    clear
+    echo -e "${red}=========================================${nc}"
+    echo -e "${red}ERROR: vnstat is not installed!${nc}"
+    echo -e "Please install it using: ${yellow}apt install vnstat -y${nc}"
+    echo -e "========================================="
+    exit 1
+fi
 
-# Display menu
-echo -e "${red}=========================================${nc}"
-echo -e "${blue}           BANDWIDTH MONITOR                 ${nc}"
-echo -e "${red}=========================================${nc}"
-echo -e ""
-echo -e "${blue} 1 ${nc} View Total Remaining Bandwidth"
-echo -e "${blue} 2 ${nc} Usage Every 5 Minutes"
-echo -e "${blue} 3 ${nc} Hourly Usage"
-echo -e "${blue} 4 ${nc} Daily Usage"
-echo -e "${blue} 5 ${nc} Monthly Usage"
-echo -e "${blue} 6 ${nc} Yearly Usage"
-echo -e "${blue} 7 ${nc} Highest Usage"
-echo -e "${blue} 8 ${nc} Hourly Usage Statistics"
-echo -e "${blue} 9 ${nc} View Current Active Usage"
-echo -e "${blue} 10 ${nc} Live Traffic [5s Interval]"
-echo -e ""
-echo -e "${blue} 0 Back To Menu ${nc}"
-echo -e "${blue} x Exit ${nc}"
-echo -e ""
-echo -e "${red}=========================================${nc}"
-echo -e ""
+# Function to run vnstat and display output
+run_vnstat() {
+    local title="$1"
+    local command="$2"
+    
+    clear
+    echo -e "${red}=========================================${nc}"
+    echo -e "${blue}      $title       ${nc}"
+    echo -e "${red}=========================================${nc}"
+    echo -e ""
+    
+    # Check for live traffic options which require specific handling for user exit
+    if [[ "$command" == "vnstat -l" || "$command" == "vnstat -tr" ]]; then
+        echo -e "${yellow} Press [ Ctrl+C ] To Stop Monitoring ${nc}"
+        echo -e ""
+    fi
+    
+    # Execute the command
+    eval "$command"
+    
+    echo -e ""
+    echo -e "${red}=========================================${nc}"
+    echo -e ""
+}
 
-read -p " Select menu option: " opt
-echo -e ""
+# --- Main Menu Loop ---
+while true; do
+    clear
+    echo -e "${red}=========================================${nc}"
+    echo -e "${blue}           BANDWIDTH MONITOR MENU          ${nc}"
+    echo -e "${red}=========================================${nc}"
+    echo -e ""
+    echo -e "${blue} 1 ${nc} View Total Remaining Bandwidth"
+    echo -e "${blue} 2 ${nc} Usage Every 5 Minutes"
+    echo -e "${blue} 3 ${nc} Hourly Usage"
+    echo -e "${blue} 4 ${nc} Daily Usage"
+    echo -e "${blue} 5 ${nc} Monthly Usage"
+    echo -e "${blue} 6 ${nc} Yearly Usage"
+    echo -e "${blue} 7 ${nc} Highest Usage Records"
+    echo -e "${blue} 8 ${nc} Hourly Usage Statistics (Graph)"
+    echo -e "${blue} 9 ${nc} View Current Active Usage (Live)"
+    echo -e "${blue} 10 ${nc} Live Traffic [5s Interval]"
+    echo -e ""
+    echo -e "${blue} 0 ${nc} Back To Menu"
+    echo -e "${blue} x ${nc} Exit"
+    echo -e ""
+    echo -e "${red}=========================================${nc}"
+    echo -e ""
 
-case $opt in
-1)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}       TOTAL SERVER BANDWIDTH REMAINING       ${nc}"
-    echo -e "${red}=========================================${nc}"
+    read -rp " Select menu option: " opt
     echo -e ""
-    vnstat
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-2)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}       TOTAL BANDWIDTH EVERY 5 MINUTES       ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    vnstat -5
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-3)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}           HOURLY BANDWIDTH                  ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    vnstat -h
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-4)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}           DAILY BANDWIDTH                   ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    vnstat -d
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-5)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}           MONTHLY BANDWIDTH                 ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    vnstat -m
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-6)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}           YEARLY BANDWIDTH                  ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    vnstat -y
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-7)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}         HIGHEST BANDWIDTH USAGE            ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    vnstat -t
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-8)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}         HOURLY USAGE STATISTICS            ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    vnstat -hg
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-9)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}          CURRENT LIVE BANDWIDTH            ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue} Press [ Ctrl+C ] To Exit ${nc}"
-    echo -e ""
-    vnstat -l
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-10)
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}        LIVE BANDWIDTH TRAFFIC [5s]         ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    vnstat -tr
-    echo -e ""
-    echo -e "${red}=========================================${nc}"
-    echo -e ""
-    read -n 1 -s -r -p "Press any key to return..."
-    bw
-    ;;
-0)
-    sleep 1
-    m-system
-    ;;
-x)
-    exit
-    ;;
-*)
-    echo -e ""
-    echo -e "${red} Invalid option, please try again... ${nc}"
-    sleep 1
-    bw
-    ;;
-esac
+
+    case "$opt" in
+        1)
+            run_vnstat "TOTAL SERVER BANDWIDTH" "vnstat"
+            ;;
+        2)
+            run_vnstat "BANDWIDTH EVERY 5 MINUTES" "vnstat -5"
+            ;;
+        3)
+            run_vnstat "HOURLY BANDWIDTH" "vnstat -h"
+            ;;
+        4)
+            run_vnstat "DAILY BANDWIDTH" "vnstat -d"
+            ;;
+        5)
+            run_vnstat "MONTHLY BANDWIDTH" "vnstat -m"
+            ;;
+        6)
+            run_vnstat "YEARLY BANDWIDTH" "vnstat -y"
+            ;;
+        7)
+            run_vnstat "HIGHEST BANDWIDTH USAGE" "vnstat -t"
+            ;;
+        8)
+            run_vnstat "HOURLY USAGE STATISTICS" "vnstat -hg"
+            ;;
+        9)
+            run_vnstat "CURRENT LIVE BANDWIDTH" "vnstat -l"
+            ;;
+        10)
+            run_vnstat "LIVE BANDWIDTH TRAFFIC [5s]" "vnstat -tr"
+            ;;
+        0)
+            # Call parent menu function if it exists, otherwise exit
+            m-system 2>/dev/null || exit 0
+            ;;
+        x)
+            exit 0
+            ;;
+        *)
+            echo -e "${red} Invalid option, please try again... ${nc}"
+            sleep 1
+            continue # Restart the loop/menu
+            ;;
+    esac
+
+    # Pause after execution, but only if not exiting the script
+    if [[ "$opt" != "0" && "$opt" != "x" ]]; then
+        read -n 1 -s -r -p "Press any key to return to the menu..."
+    fi
+done

@@ -1,9 +1,9 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
-# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
-# Version : 1.0
-# Author  : gilper0x
+# Name    : create-trial
+# Title   : Auto Script VPS to Create Trial VPN/SSH User
+# Version : 1.2 (Hardening and UX refinement)
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
@@ -15,137 +15,80 @@ yellow='\e[1;33m'
 blue='\e[1;34m'
 nc='\e[0m'
 
+# Exit immediately if a command exits with a non-zero status
+set -eo pipefail
+
 # Detect VPS Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com)
 clear
 
+# --- Configuration Files ---
+# IMPORTANT: Expand ~ to /root explicitly in scripts
+LOG_FILE="/root/log-install.txt"
+
 # --- Detect XRAY / V2RAY domain ---
-if grep -q "XRAY" ~/log-install.txt; then
-    DOMAIN=$(cat /etc/xray/domain)
-else
-    DOMAIN=$(cat /etc/v2ray/domain)
+DOMAIN_PATH="/etc/xray/domain"
+if [ ! -f "$DOMAIN_PATH" ]; then
+    DOMAIN_PATH="/etc/v2ray/domain"
 fi
 
-# --- Extract service ports from log ---
-PORT_SSH_WS=$(grep -w "noneTLS" ~/log-install.txt | cut -d: -f2 | awk '{print $1}')
-PORT_SSH_SSL_WS=$(grep -w "TLS" ~/log-install.txt | cut -d: -f2 | awk '{print $1}')
-PORT_OPENSSH=$(grep -w "OpenSSH" ~/log-install.txt | cut -d: -f2 | awk '{print $1,$2}')
-PORT_DROPBEAR=$(grep -w "Dropbear" ~/log-install.txt | cut -d: -f2 | awk '{print $1,$2}')
-PORT_SSL=$(grep -w "Stunnel4" ~/log-install.txt | cut -d: -f2 | awk '{print $1,$2}')
+# Ensure domain is set, falling back to IP if file is missing
+DOMAIN=$(cat "$DOMAIN_PATH" 2>/dev/null || echo "$MYIP")
+
+# --- Extract service ports from log (using safer greps) ---
+# Use the same fallback (|| echo "N/A") for consistency when log file is missing or empty
+PORT_SSH_WS=$(grep -w "noneTLS" "$LOG_FILE" 2>/dev/null | cut -d: -f2 | awk '{print $1}' || echo "-")
+PORT_SSH_SSL_WS=$(grep -w "TLS" "$LOG_FILE" 2>/dev/null | cut -d: -f2 | awk '{print $1}' || echo "-")
+PORT_OPENSSH=$(grep -w "OpenSSH" "$LOG_FILE" 2>/dev/null | cut -d: -f2 | awk '{print $1,$2}' || echo "22")
+PORT_DROPBEAR=$(grep -w "Dropbear" "$LOG_FILE" 2>/dev/null | cut -d: -f2 | awk '{print $1,$2}' || echo "109")
+PORT_SSL=$(grep -w "Stunnel4" "$LOG_FILE" 2>/dev/null | cut -d: -f2 | awk '{print $1,$2}' || echo "444")
 
 # --- Trial Account Settings ---
-USER="trial$(tr -dc X-Z0-9 </dev/urandom | head -c4)"
+# Use a cleaner way to generate a 4-char alphanumeric random string
+USER="trial$(head /dev/urandom | tr -dc a-z0-9 | head -c4)"
 PASS="1"
 DAYS_ACTIVE=1
 
 # --- Create Trial Account ---
+# -M: Don't create home directory
+# -s /bin/false: Disable interactive shell login
+# -e: Set expiration date
 useradd -e "$(date -d "$DAYS_ACTIVE days" +"%Y-%m-%d")" -s /bin/false -M "$USER"
+# Set password (suppressing all output)
 echo -e "$PASS\n$PASS\n" | passwd "$USER" &>/dev/null
+
+# Get formatted expiration date for display
 EXP_DATE=$(chage -l "$USER" | grep "Account expires" | awk -F": " '{print $2}')
 
-# --- Ask max login limit ---
-read -p "Enter max simultaneous logins (default=1): " MAX_LOGIN
+# --- Ask max login limit (for informational display) ---
+read -rp "Enter max simultaneous logins (default=1): " MAX_LOGIN
 MAX_LOGIN=${MAX_LOGIN:-1}
 
 clear
 echo -e "${red}=========================================${nc}"
-echo -e "${blue}            TRIAL SSH              ${nc}"
+echo -e "${blue}          ✅ TRIAL SSH ACCOUNT ✅          ${nc}"
 echo -e "${red}=========================================${nc}"
-echo -e "Username   : $USER"
-echo -e "Password   : $PASS"
-echo -e "Expired On : $EXP_DATE"
+echo -e "Username   : ${green}$USER${nc}"
+echo -e "Password   : ${green}$PASS${nc}"
+echo -e "Expired On : ${yellow}$EXP_DATE${nc}"
 echo -e "Max Login  : $MAX_LOGIN"
 echo -e "${red}=========================================${nc}"
 echo -e "IP         : $MYIP"
 echo -e "Host       : $DOMAIN"
 echo -e "OpenSSH    : $PORT_OPENSSH"
 echo -e "Dropbear   : $PORT_DROPBEAR"
-echo -e "SSH WS     : $PORT_SSH_WS"
-echo -e "SSH SSL WS : $PORT_SSH_SSL_WS"
 echo -e "Stunnel4   : $PORT_SSL"
-echo -e "UDPGW      : 7100-7900"
+echo -e "SSH WS     : $PORT_SSH_WS (No TLS)"
+echo -e "SSH SSL WS : $PORT_SSH_SSL_WS (TLS)"
+echo -e "UDPGW      : 7100-7900 (Proxy)"
 echo -e "${red}=========================================${nc}"
-echo -e "Payload WSS"
+echo -e "${blue}WebSocket Payloads (For Tunnel Apps):${nc}"
+echo -e "${yellow}WSS Payload (Secure - Port $PORT_SSH_SSL_WS):${nc}"
 echo -e "GET wss://bug.com HTTP/1.1[crlf]Host: ${DOMAIN}[crlf]Upgrade: websocket[crlf][crlf]"
-echo -e "${red}=========================================${nc}"
-echo -e "Payload WS"
+echo -e "${red}-----------------------------------------${nc}"
+echo -e "${yellow}WS Payload (Non-Secure - Port $PORT_SSH_WS):${nc}"
 echo -e "GET / HTTP/1.1[crlf]Host: $DOMAIN[crlf]Upgrade: websocket[crlf][crlf]"
 echo -e "${red}=========================================${nc}"
 
-# --- Auto Remove Expired Accounts ---
-TODAY=$(date +%s)
-while IFS=: read -r u _; do
-    if [ -n "$u" ]; then
-        EXP=$(chage -l "$u" 2>/dev/null | grep "Account expires" | awk -F": " '{print $2}')
-        if [[ "$EXP" != "never" && -n "$EXP" ]]; then
-            EXP_SECS=$(date -d "$EXP" +%s 2>/dev/null)
-            if [ "$EXP_SECS" -lt "$TODAY" ]; then
-                userdel -r "$u"
-                echo "$(date +"%Y-%m-%d %X") - Removed expired user: $u" >> /root/expired-users.log
-            fi
-        fi
-    fi
-done < /etc/passwd
-
-# --- Limit Login Check ---
-LOG_FILE=""
-if [ -e "/var/log/auth.log" ]; then
-    OS=1
-    LOG_FILE="/var/log/auth.log"
-elif [ -e "/var/log/secure" ]; then
-    OS=2
-    LOG_FILE="/var/log/secure"
-fi
-
-if [ -n "$LOG_FILE" ]; then
-    USERS=$(grep "/home/" /etc/passwd | cut -d: -f1)
-
-    for U in $USERS; do
-        COUNT=0
-        PIDS=""
-
-        # Dropbear check
-        DBLOG=$(grep -i dropbear "$LOG_FILE" | grep -i "Password auth succeeded")
-        for PID in $(ps aux | grep -i dropbear | awk '{print $2}'); do
-            if grep -q "dropbear\[$PID\]" <<< "$DBLOG"; then
-                LOGIN_USER=$(grep "dropbear\[$PID\]" <<< "$DBLOG" | awk '{print $10}')
-                if [ "$LOGIN_USER" == "$U" ]; then
-                    COUNT=$((COUNT + 1))
-                    PIDS="$PIDS $PID"
-                fi
-            fi
-        done
-
-        # SSH check
-        SSHLOG=$(grep -i sshd "$LOG_FILE" | grep -i "Accepted password for")
-        for PID in $(ps aux | grep "\[priv\]" | awk '{print $2}'); do
-            if grep -q "sshd\[$PID\]" <<< "$SSHLOG"; then
-                LOGIN_USER=$(grep "sshd\[$PID\]" <<< "$SSHLOG" | awk '{print $9}')
-                if [ "$LOGIN_USER" == "$U" ]; then
-                    COUNT=$((COUNT + 1))
-                    PIDS="$PIDS $PID"
-                fi
-            fi
-        done
-
-        # Kill if exceeding limit
-        if [ $COUNT -gt $MAX_LOGIN ]; then
-            DATE_NOW=$(date +"%Y-%m-%d %X")
-            echo "$DATE_NOW - $U - $COUNT" >> /root/log-limit.txt
-            kill $PIDS
-            echo "User $U exceeded limit ($COUNT logins > $MAX_LOGIN) and was kicked."
-        fi
-    done
-
-    # Restart services
-    if [ "$OS" -eq 1 ]; then
-        service ssh restart >/dev/null 2>&1
-    elif [ "$OS" -eq 2 ]; then
-        service sshd restart >/dev/null 2>&1
-    fi
-    service dropbear restart >/dev/null 2>&1
-fi
-
-echo ""
-read -n 1 -s -r -p "Press any key to return to menu"
-m-sshovpn
+read -n 1 -s -r -p "Press any key to return to menu..."
+m-sshovpn 2>/dev/null || exit 0

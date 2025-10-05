@@ -1,63 +1,132 @@
 <!DOCTYPE html>
-<!--
-# Name    : givps
-# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
-# Version : 1.0
-# Author  : gilper0x
-# Website : https://givps.com
-# License : The MIT License (MIT)
-# =========================================
--->
 <html lang="en">
 <head>
-	<meta charset="UTF-8" />
-	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-	<meta name="viewport"
-		content="width=device-width,
-				initial-scale=1.0" />
-	<title>
-		Auto Script VPS For Create VPN on Debian & Ubuntu Server
-	</title>
-	  <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/givps/favicon/refs/heads/main/favicon.ico">
-	<style>
-		body {
-			padding: 25px;
-			background-color: white;
-			color: black;
-			font-size: 25px;
-		}
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+        Auto Script VPS For Create VPN on Debian & Ubuntu Server
+    </title>
+    <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/givps/favicon/refs/heads/main/favicon.ico">
+    <style>
+        /* Define color variables for easy theming */
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --link-color: #0000ff;
+            --padding-size: 25px;
+        }
 
-		.dark-mode {
-			background-color: black;
-			color: white;
-		}
-	</style>
+        .dark-mode {
+            --bg-color: #121212;
+            --text-color: #ffffff;
+            --link-color: #8cafff;
+        }
+
+        body {
+            padding: var(--padding-size);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: Arial, sans-serif;
+            font-size: 20px; /* Slightly smaller default font */
+            transition: background-color 0.3s, color 0.3s; /* Smooth transition */
+        }
+        
+        a {
+            color: var(--link-color);
+            text-decoration: none;
+        }
+
+        /* Centered content block */
+        .content-container {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Style the button */
+        #darkModeToggle {
+            padding: 10px 20px;
+            border: 2px solid var(--text-color);
+            background-color: transparent;
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        #darkModeToggle:hover {
+            opacity: 0.8;
+        }
+
+        /* Footer styling for better structure */
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ccc;
+        }
+    </style>
 </head>
 
 <body>
-<center>
-	<h1>givps</h1>
-	<div>
-		<button onclick="darkMode()">Darkmode</button>
-	</div>
-	<script>
-		function darkMode() {
-			var element = document.body;
-			element.classList.toggle("dark-mode");
-		}
-	</script>
-	</center>
-	</div>
-        <div class="footer">
-            <footer>
-		<p align="center">
-            <a href="https://github.com/givps" target="_blank"><img src="https://img.shields.io/badge/github-blue"></a>
-			<a href="https://t.me/givps_com" target="_blank"><img src="https://img.shields.io/badge/telegram-blue"></a>
-			    </p>
-            </footer>
-        </div>
-		<p align="center">
-            <a href="https://givps.com" target="_blank"><img src="https://img.shields.io/badge/givps.com-blue"></a>
-    </p>
+    <div class="content-container">
+        <header>
+            <h1>givps</h1>
+            <div>
+                <button id="darkModeToggle" aria-label="Toggle Dark Mode">Enable Dark Mode</button>
+            </div>
+        </header>
+
+        <main>
+            <p>Welcome to the auto-script landing page.</p>
+        </main>
+
+        <footer class="footer">
+            <p>
+                <a href="https://github.com/givps" target="_blank"><img src="https://img.shields.io/badge/github-blue" alt="GitHub"></a>
+                <a href="https://t.me/givps_com" target="_blank"><img src="https://img.shields.io/badge/telegram-blue" alt="Telegram"></a>
+            </p>
+            <p>
+                <a href="https://givps.com" target="_blank"><img src="https://img.shields.io/badge/givps.com-blue" alt="GivPS Website"></a>
+            </p>
+            <p>Copyright &copy; 2025 givps. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        const body = document.body;
+        const toggleButton = document.getElementById('darkModeToggle');
+        const localStorageKey = 'darkModeEnabled';
+
+        // 1. Check saved preference on load
+        function loadTheme() {
+            const isDarkMode = localStorage.getItem(localStorageKey) === 'true';
+            setTheme(isDarkMode);
+        }
+
+        // 2. Apply theme and update button text
+        function setTheme(isDark) {
+            if (isDark) {
+                body.classList.add("dark-mode");
+                toggleButton.textContent = "Disable Dark Mode";
+            } else {
+                body.classList.remove("dark-mode");
+                toggleButton.textContent = "Enable Dark Mode";
+            }
+        }
+
+        // 3. Toggle theme on button click
+        function toggleDarkMode() {
+            const isCurrentlyDark = body.classList.contains("dark-mode");
+            const newMode = !isCurrentlyDark;
+            
+            setTheme(newMode);
+            localStorage.setItem(localStorageKey, newMode);
+        }
+
+        // Event listener and initial load
+        toggleButton.addEventListener('click', toggleDarkMode);
+        loadTheme();
+    </script>
 </body>
 </html>

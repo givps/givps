@@ -1,9 +1,9 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
-# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
-# Version : 1.0
-# Author  : gilper0x
+# Name    : add-ws
+# Title   : Auto Script VPS for Creating VMess (Xray) Account
+# Version : 1.1 (Revised)
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
@@ -13,171 +13,173 @@ red='\e[1;31m'    # Bright Red
 green='\e[0;32m'  # Green
 yellow='\e[1;33m' # Bright Yellow
 blue='\e[1;34m'   # Bright Blue
-nc='\e[0m'        # Reset color
+nc='\e[0m'        # No Color (reset)
 
-# Detect VPS IP
-MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo -e "${green}Checking VPS...${nc}"
 clear
+echo -e "${green}Checking VPS...${nc}"
 
-# Load saved domain/IP config
-source /var/lib/ipvps.conf
-if [[ -z "$IP" ]]; then
-    domain=$(cat /etc/xray/domain)
+# --- Load domain ---
+if [[ -f /var/lib/ipvps.conf ]]; then
+    source /var/lib/ipvps.conf
+    DOMAIN=${IP:-$(cat /etc/xray/domain 2>/dev/null)}
 else
-    domain=$IP
+    DOMAIN=$(cat /etc/xray/domain 2>/dev/null)
 fi
 
-tls="$(grep -w "TLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')"
-none="$(grep -w "noneTLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')"
+[[ -z "$DOMAIN" ]] && { echo -e "${red}❌ ERROR: Domain not found in /etc/xray/domain.${nc}"; exit 1; }
 
-# Create new user
-until [[ $user =~ ^[a-zA-Z0-9_]+$ && ${CLIENT_EXISTS} == '0' ]]; do
+# --- Load ports with robust defaults ---
+TLS_PORT=$(grep -w "TLS" ~/log-install.txt 2>/dev/null | cut -d: -f2 | tr -d ' ')
+NONE_PORT=$(grep -w "noneTLS" ~/log-install.txt 2>/dev/null | cut -d: -f2 | tr -d ' ')
+
+TLS_PORT=${TLS_PORT:-"443"}
+NONE_PORT=${NONE_PORT:-"80"}
+
+# --- Input username ---
+while true; do
     echo -e "${red}=========================================${nc}"
     echo -e "${blue}          Add VMess Account              ${nc}"
     echo -e "${red}=========================================${nc}"
-    read -rp "Username: " -e user
-    CLIENT_EXISTS=$(grep -w $user /etc/xray/config.json | wc -l)
+    read -rp "Enter Username (Alphanumeric only): " -e user
 
-    if [[ ${CLIENT_EXISTS} == '1' ]]; then
-        clear
-        echo -e "${red}=========================================${nc}"
-        echo -e "${blue}          Add VMess Account              ${nc}"
-        echo -e "${red}=========================================${nc}"
-        echo ""
-        echo "Error: A client with this username already exists. Please choose another name."
-        echo ""
-        echo -e "${red}=========================================${nc}"
-        read -n 1 -s -r -p "Press any key to return to menu"
-        m-vmess
+    if [[ -z "$user" ]]; then
+        echo -e "${yellow}⚠ Username cannot be empty.${nc}"; continue
+    fi
+
+    # Stronger username validation
+    if [[ ! "$user" =~ ^[a-zA-Z0-9_]+$ ]]; then
+        echo -e "${red}❌ Invalid username! Use only letters, numbers, and underscore.${nc}"; continue
+    fi
+
+    # Check for duplicate in user file
+    mkdir -p /etc/xray
+    if [[ -f /etc/xray/vmess-users ]] && grep -q "^$user " /etc/xray/vmess-users; then
+        echo -e "${red}❌ Username already exists!${nc}"
+        read -n 1 -s -r -p "Press any key to return to menu..."
+        type m-vmess &> /dev/null && m-vmess || exit 0
+    else
+        break
     fi
 done
 
-uuid=$(cat /proc/sys/kernel/random/uuid)
-read -p "Expired (days): " expired
-exp=$(date -d "$expired days" +"%Y-%m-%d")
+# --- Generate data ---
+UUID=$(cat /proc/sys/kernel/random/uuid)
+read -rp "Expired (days): " expired
+# Check if input is empty or non-positive
+if ! [[ "$expired" =~ ^[0-9]+$ ]] || [[ "$expired" -le 0 ]]; then
+    echo -e "${yellow}⚠ Invalid/empty expiration set. Defaulting to 1 day.${nc}"
+    expired=1
+fi
+EXP_DATE=$(date -d "$expired days" +"%Y-%m-%d")
 
-# Add user to config.json
-sed -i '/#vmess$/a\### '"$user $exp"'\
-},{"id": "'$uuid'","alterId": 0,"email": "'$user'"' /etc/xray/config.json
-sed -i '/#vmessgrpc$/a\### '"$user $exp"'\
-},{"id": "'$uuid'","alterId": 0,"email": "'$user'"' /etc/xray/config.json
-
-# Save user to database
-echo "$user $exp" >> /etc/xray/vmess-user
-
-# Ensure auto-cleaner is installed
-if [[ ! -f /usr/local/bin/vmess-cleaner ]]; then
-cat > /usr/local/bin/vmess-cleaner <<'EOF'
-#!/bin/bash
-# Auto remove expired VMess users from Xray
-config="/etc/xray/config.json"
-db="/etc/xray/vmess-user"
-today=$(date +%Y-%m-%d)
-
-[[ ! -f $db ]] && exit 0
-
-while read -r user exp; do
-  if [[ $(date -d "$exp" +%s) -lt $(date -d "$today" +%s) ]]; then
-    echo "Removing expired user: $user ($exp)"
-    sed -i "/^### $user $exp/,/},/d" $config
-    sed -i "/$user $exp/d" $db
-  fi
-done < $db
-
-systemctl restart xray
-EOF
-chmod +x /usr/local/bin/vmess-cleaner
-
-# Cronjob
-cat > /etc/cron.d/vmess-cleaner <<EOF
-0 0 * * * root /usr/local/bin/vmess-cleaner >/dev/null 2>&1
-EOF
+# --- Install jq if not exists ---
+if ! command -v jq &> /dev/null; then
+    echo -e "[ ${yellow}INFO${nc} ] Installing jq..."
+    apt update -qq && apt install -y jq
+    if [[ $? -ne 0 ]]; then
+        echo -e "${red}❌ ERROR: Failed to install jq.${nc}"; exit 1
+    fi
 fi
 
-# Generate VMess configs
-wstls=$(cat<<EOF
-{
-"v": "2",
-"ps": "${user}",
-"add": "${domain}",
-"port": "443",
-"id": "${uuid}",
-"aid": "0",
-"net": "ws",
-"path": "/vmess",
-"type": "none",
-"host": "",
-"tls": "tls"
-}
+# --- Add to config.json using jq (safe JSON manipulation) ---
+echo -e "[ ${green}INFO${nc} ] Updating Xray config..."
+jq --arg uid "$UUID" --arg usr "$user" \
+   '.inbounds[] |= if (.protocol == "vmess" and .streamSettings.network == "ws") then
+        .settings.clients += [{"id": $uid, "alterId": 0, "email": $usr}]
+     elif (.protocol == "vmess" and .streamSettings.network == "grpc") then
+        .settings.clients += [{"id": $uid, "alterId": 0, "email": $usr}]
+     else . end' \
+   /etc/xray/config.json > /tmp/config.json.tmp
+
+if [[ $? -ne 0 ]] || [[ ! -s /tmp/config.json.tmp ]]; then
+    echo -e "${red}❌ ERROR: Failed to update Xray config.json via jq! Check jq syntax or config.${nc}"
+    rm -f /tmp/config.json.tmp
+    exit 1
+fi
+mv /tmp/config.json.tmp /etc/xray/config.json
+
+# --- Save to user database ---
+echo "$user $UUID $EXP_DATE" >> /etc/xray/vmess-users
+
+# --- Auto-cleaner setup (Ensure cron is only added once) ---
+if [[ ! -f /usr/local/bin/vmess-cleaner ]]; then
+    echo -e "[ ${green}INFO${nc} ] Setting up vmess-cleaner cron job..."
+cat > /usr/local/bin/vmess-cleaner << 'EOF'
+#!/bin/bash
+USER_FILE="/etc/xray/vmess-users"
+CONFIG="/etc/xray/config.json"
+TODAY_TS=$(date +%s)
+
+[ ! -f "$USER_FILE" ] && exit 0
+
+> "$USER_FILE.tmp"
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  set -- $line
+  user="$1"; uuid="$2"; exp="$3"
+  # Use date -d to parse expiration date string to timestamp
+  exp_ts=$(date -d "$exp 00:00:00" +%s 2>/dev/null || echo 0)
+  
+  # Check if the expiration timestamp is less than or equal to today's timestamp
+  if [ "$exp_ts" -le "$TODAY_TS" ] && [ "$exp_ts" -ne 0 ] 2>/dev/null; then
+    echo "$(date): Removing expired user: $user" >> /var/log/vmess-cleaner.log
+    # Remove client from Xray config by email/tag
+    jq --arg u "$user" 'del(.inbounds[]?.settings.clients[]? | select(.email == $u))' "$CONFIG" > "$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
+  else
+    # Keep the user if not expired
+    echo "$line" >> "$USER_FILE.tmp"
+  fi
+done < "$USER_FILE"
+
+# Replace old user file with non-expired users
+mv "$USER_FILE.tmp" "$USER_FILE"
+systemctl restart xray
 EOF
-)
+    chmod +x /usr/local/bin/vmess-cleaner
+    # Add cron job if it doesn't exist
+    if ! crontab -l 2>/dev/null | grep -q "vmess-cleaner"; then
+        (crontab -l 2>/dev/null; echo "0 0 * * * /usr/local/bin/vmess-cleaner >/dev/null 2>&1") | crontab -
+    fi
+fi
 
-wsnontls=$(cat<<EOF
-{
-"v": "2",
-"ps": "${user}",
-"add": "${domain}",
-"port": "80",
-"id": "${uuid}",
-"aid": "0",
-"net": "ws",
-"path": "/vmess",
-"type": "none",
-"host": "",
-"tls": "none"
-}
-EOF
-)
+# --- Generate VMess links ---
+# WS-TLS: Host field is necessary for SNI/domain fronting compatibility
+WSTLS_JSON='{"v":"2","ps":"'"$user"'","add":"'"$DOMAIN"'","port":"'"$TLS_PORT"'","id":"'"$UUID"'","aid":"0","net":"ws","path":"/vmess","type":"none","host":"'"$DOMAIN"'","tls":"tls"}'
+# WS-NoneTLS
+WSNONTLS_JSON='{"v":"2","ps":"'"$user"'","add":"'"$DOMAIN"'","port":"'"$NONE_PORT"'","id":"'"$UUID"'","aid":"0","net":"ws","path":"/vmess","type":"none","host":"'"$DOMAIN"'","tls":"none"}'
+# gRPC-TLS: path is the serviceName for gRPC
+GRPC_JSON='{"v":"2","ps":"'"$user"'","add":"'"$DOMAIN"'","port":"'"$TLS_PORT"'","id":"'"$UUID"'","aid":"0","net":"grpc","path":"vmess-grpc","type":"none","host":"'"$DOMAIN"'","tls":"tls"}'
 
-grpc=$(cat<<EOF
-{
-"v": "2",
-"ps": "${user}",
-"add": "${domain}",
-"port": "443",
-"id": "${uuid}",
-"aid": "0",
-"net": "grpc",
-"path": "vmess-grpc",
-"type": "none",
-"host": "",
-"tls": "tls"
-}
-EOF
-)
+VMESS_LINK_TLS="vmess://$(echo -n "$WSTLS_JSON" | base64 -w 0)"
+VMESS_LINK_NONE_TLS="vmess://$(echo -n "$WSNONTLS_JSON" | base64 -w 0)"
+VMESS_LINK_GRPC="vmess://$(echo -n "$GRPC_JSON" | base64 -w 0)"
 
-vmesslink1="vmess://$(echo $wstls | base64 -w 0)"
-vmesslink2="vmess://$(echo $wsnontls | base64 -w 0)"
-vmesslink3="vmess://$(echo $grpc | base64 -w 0)"
+# --- Restart services ---
+echo -e "[ ${green}INFO${nc} ] Restarting Xray service..."
+systemctl restart xray
 
-systemctl restart xray >/dev/null 2>&1
-service cron restart >/dev/null 2>&1
-
-# Show account details
+# --- Display account info ---
 clear
 echo -e "${red}=========================================${nc}" | tee -a /etc/log-create-vmess.log
-echo -e "${blue}           VMess Account                 ${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "${blue}          VMess Account Created          ${nc}" | tee -a /etc/log-create-vmess.log
 echo -e "${red}=========================================${nc}" | tee -a /etc/log-create-vmess.log
-echo -e "Username       : ${user}" | tee -a /etc/log-create-vmess.log
-echo -e "Domain         : ${domain}" | tee -a /etc/log-create-vmess.log
-echo -e "Wildcard       : bug.com.${domain}" | tee -a /etc/log-create-vmess.log
-echo -e "Port TLS       : ${tls}" | tee -a /etc/log-create-vmess.log
-echo -e "Port none TLS  : ${none}" | tee -a /etc/log-create-vmess.log
-echo -e "Port gRPC      : ${tls}" | tee -a /etc/log-create-vmess.log
-echo -e "UUID           : ${uuid}" | tee -a /etc/log-create-vmess.log
-echo -e "alterId        : 0" | tee -a /etc/log-create-vmess.log
-echo -e "Security       : auto" | tee -a /etc/log-create-vmess.log
-echo -e "Network        : ws/grpc" | tee -a /etc/log-create-vmess.log
-echo -e "Path           : /vmess" | tee -a /etc/log-create-vmess.log
-echo -e "ServiceName    : vmess-grpc" | tee -a /etc/log-create-vmess.log
+echo -e "Username       : ${yellow}${user}${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "Domain         : ${yellow}${DOMAIN}${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "Port TLS (WS/gRPC): ${yellow}${TLS_PORT}${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "Port None TLS (WS): ${yellow}${NONE_PORT}${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "UUID           : ${yellow}${UUID}${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "Expired On     : ${yellow}${EXP_DATE}${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "${red}-----------------------------------------${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "  Link WS TLS (Recommended)  " | tee -a /etc/log-create-vmess.log
+echo -e "${VMESS_LINK_TLS}" | tee -a /etc/log-create-vmess.log
+echo -e "${red}-----------------------------------------${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "  Link gRPC TLS  " | tee -a /etc/log-create-vmess.log
+echo -e "${VMESS_LINK_GRPC}" | tee -a /etc/log-create-vmess.log
+echo -e "${red}-----------------------------------------${nc}" | tee -a /etc/log-create-vmess.log
+echo -e "  Link WS None TLS  " | tee -a /etc/log-create-vmess.log
+echo -e "${VMESS_LINK_NONE_TLS}" | tee -a /etc/log-create-vmess.log
 echo -e "${red}=========================================${nc}" | tee -a /etc/log-create-vmess.log
-echo -e "Link TLS       : ${vmesslink1}" | tee -a /etc/log-create-vmess.log
-echo -e "Link none TLS  : ${vmesslink2}" | tee -a /etc/log-create-vmess.log
-echo -e "Link gRPC      : ${vmesslink3}" | tee -a /etc/log-create-vmess.log
-echo -e "Expired On     : $exp" | tee -a /etc/log-create-vmess.log
-echo -e "${red}=========================================${nc}" | tee -a /etc/log-create-vmess.log
-echo "" | tee -a /etc/log-create-vmess.log
-read -n 1 -s -r -p "Press any key to return to menu"
 
-m-vmess
+read -n 1 -s -r -p "Press any key to return to the menu..."
+# Safely return to menu function
+type m-vmess &> /dev/null && m-vmess || exit 0

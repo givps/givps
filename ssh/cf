@@ -1,73 +1,108 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
-# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
-# Version : 1.0
-# Author  : gilper0x
+# Name    : cf-random-subdomain
+# Title   : Auto Script to Create Random Subdomain via Cloudflare API
+# Version : 1.1 (Revised for Error Checking and Clarity)
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
 
 # --- Colors ---
-red='\e[1;31m'
-green='\e[0;32m'
-yellow='\e[1;33m'
-blue='\e[1;34m'
-nc='\e[0m'
+red='\e[1;31m'    # Bright Red
+green='\e[0;32m'  # Green
+yellow='\e[1;33m' # Bright Yellow
+blue='\e[1;34m'   # Bright Blue
+nc='\e[0m'        # Reset color
 
+# Exit immediately if a command exits with a non-zero status, 
+# exit if any pipeline fails, and treat unset variables as an error.
 set -euo pipefail
 
-# --- Install dependencies ---
-apt update -y && apt install -y jq curl wget
-
-# --- Cloudflare Configuration ---
+# --- Configuration (WARNING: Token is hardcoded) ---
 DOMAIN="givps.com"
-CF_ZONE_ID="53c3aca6f94d04b0742e82cf6891c02a"   # Ganti dengan Zone ID domain kamu
-CF_TOKEN="zs5NCxjmO-9lspqfhNfbF60aKCobdfKVQyYKZg65"   # Ganti dengan API Token kamu
+CF_ZONE_ID="53c3aca6f94d04b0742e82cf6891c02a"
+CF_TOKEN="zs5NCxjmO-9lspqfhNfbF60aKCobdfKVQyYKZg65"
 
-# --- Generate random numeric subdomain ---
-SUB=$(tr -dc 0-9 </dev/urandom | head -c5)
+# --- Constants ---
+API_URL="https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records"
+CURL_OPTS=(-sLX)
+AUTH_HEADERS=(-H "Authorization: Bearer ${CF_TOKEN}" -H "Content-Type: application/json")
+
+# --- Install dependencies ---
+echo -e "${yellow}Updating packages and installing dependencies (jq, curl, wget)...${nc}"
+apt update -y >/dev/null 2>&1
+# Use apt-get for better non-interactive installation
+if ! apt-get install -y jq curl wget >/dev/null 2>&1; then
+    echo -e "${red}❌ ERROR: Failed to install required dependencies (jq, curl, wget).${nc}"
+    exit 1
+fi
+
+# --- Generate random alphanumeric subdomain (more unique) ---
+# Generating a 5-char random string (0-9, a-z)
+SUB=$(head /dev/urandom | tr -dc a-z0-9 | head -c 5)
 SUB_DOMAIN="vpn${SUB}.${DOMAIN}"
 
 # --- Get VPS public IP ---
 IP=$(curl -s ipv4.icanhazip.com || wget -qO- ipv4.icanhazip.com)
 
-echo "🔄 Adding/Updating DNS record: ${SUB_DOMAIN} → ${IP}"
+echo -e "\n${blue}=========================================${nc}"
+echo "🔄 Preparing DNS record for: ${SUB_DOMAIN} → ${IP}"
+echo -e "${blue}=========================================${nc}"
 
 # --- Check if DNS record already exists ---
-RECORD=$(curl -sLX GET "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records?name=${SUB_DOMAIN}" \
-  -H "Authorization: Bearer ${CF_TOKEN}" \
-  -H "Content-Type: application/json" | jq -r .result[0].id)
+CHECK_RESPONSE=$(curl "${CURL_OPTS[@]}" GET "${API_URL}?name=${SUB_DOMAIN}" "${AUTH_HEADERS[@]}")
+RECORD=$(echo "$CHECK_RESPONSE" | jq -r '.result[0].id // empty')
 
-# --- If record does not exist, create new ---
-if [[ -z "$RECORD" || "${#RECORD}" -le 10 ]]; then
-  echo "🆕 Creating new DNS record..."
-  RECORD=$(curl -sLX POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
-    -H "Authorization: Bearer ${CF_TOKEN}" \
-    -H "Content-Type: application/json" \
-    --data "{\"type\":\"A\",\"name\":\"${SUB_DOMAIN}\",\"content\":\"${IP}\",\"ttl\":120,\"proxied\":false}" \
-    | jq -r .result.id)
+if [[ -z "$RECORD" || "$RECORD" == "null" ]]; then
+  echo -e "${yellow}🆕 Creating new DNS record...${nc}"
+  
+  # --- Create new DNS record ---
+  CREATE_RESPONSE=$(curl "${CURL_OPTS[@]}" POST "$API_URL" "${AUTH_HEADERS[@]}" \
+    --data "{\"type\":\"A\",\"name\":\"${SUB_DOMAIN}\",\"content\":\"${IP}\",\"ttl\":120,\"proxied\":false}")
+  
+  RECORD=$(echo "$CREATE_RESPONSE" | jq -r '.result.id // empty')
+  SUCCESS=$(echo "$CREATE_RESPONSE" | jq -r '.success')
+  
+  if [[ "$SUCCESS" != "true" || -z "$RECORD" || "$RECORD" == "null" ]]; then
+      echo -e "${red}❌ ERROR: Failed to create DNS record!${nc}"
+      echo -e "${red}Cloudflare Response: $(echo "$CREATE_RESPONSE" | jq -r '.errors[].message // "Unknown error"')"
+      exit 1
+  fi
+  
+  echo -e "${green}✅ New record created with ID: ${RECORD}${nc}"
+
 else
-  echo "♻️ Updating existing DNS record..."
+  echo -e "${yellow}♻️ Existing DNS record found (ID: ${RECORD}). Updating IP...${nc}"
+  
+  # --- Update existing DNS record with current IP ---
+  UPDATE_RESPONSE=$(curl "${CURL_OPTS[@]}" PUT "${API_URL}/${RECORD}" "${AUTH_HEADERS[@]}" \
+    --data "{\"type\":\"A\",\"name\":\"${SUB_DOMAIN}\",\"content\":\"${IP}\",\"ttl\":120,\"proxied\":false}")
+
+  SUCCESS=$(echo "$UPDATE_RESPONSE" | jq -r '.success')
+  
+  if [[ "$SUCCESS" != "true" ]]; then
+      echo -e "${red}❌ ERROR: Failed to update DNS record!${nc}"
+      echo -e "${red}Cloudflare Response: $(echo "$UPDATE_RESPONSE" | jq -r '.errors[].message // "Unknown error"')"
+      exit 1
+  fi
+  
+  echo -e "${green}✅ Record updated successfully.${nc}"
 fi
 
-# --- Update DNS record with current IP ---
-curl -sLX PUT "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records/${RECORD}" \
-  -H "Authorization: Bearer ${CF_TOKEN}" \
-  -H "Content-Type: application/json" \
-  --data "{\"type\":\"A\",\"name\":\"${SUB_DOMAIN}\",\"content\":\"${IP}\",\"ttl\":120,\"proxied\":false}" >/dev/null
-
 # --- Save results to config files ---
+echo -e "${yellow}Saving domain to configuration files...${nc}"
 for f in /root/domain /etc/xray/domain /etc/v2ray/domain; do
-  mkdir -p "$(dirname "$f")"
+  mkdir -p "$(dirname "$f")" 2>/dev/null
   echo "$SUB_DOMAIN" >"$f"
 done
 echo "IP=$SUB_DOMAIN" >/var/lib/ipvps.conf
+echo -e "${green}✅ Configuration files updated.${nc}"
 
 # --- Final output ---
 echo -e "${red}=========================================${nc}"
-echo "✅ Subdomain successfully created:"
-echo "Host : $SUB_DOMAIN"
-echo "IP   : $IP"
+echo "🎉 Subdomain successfully configured:"
+echo "Host : ${green}$SUB_DOMAIN${nc}"
+echo "IP   : ${green}$IP${nc}"
 echo -e "${red}=========================================${nc}"
 sleep 5

@@ -1,109 +1,155 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
-# Title   : Auto Script VPS For VPN (Trojan) on Debian & Ubuntu
-# Version : 1.0
-# Author  : gilper0x
+# Name    : trialtrojan
+# Title   : Create Trial Trojan Account
+# Version : 1.2 (Revised)
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
 
 # --- Colors ---
-red='\e[1;31m'    # Bright Red
-green='\e[0;32m'  # Green
-yellow='\e[1;33m' # Bright Yellow
-blue='\e[1;34m'   # Bright Blue
-nc='\e[0m'        # No Color (reset)
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
 
-# --- Get Server IP ---
-MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo -e "${green}Checking VPS...${nc}"
 clear
+echo -e "${green}Creating Trial Trojan Account...${nc}"
 
-# --- Domain & Ports ---
-domain=$(cat /etc/xray/domain)
-tls=$(grep -w "TLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
-none=$(grep -w "noneTLS" ~/log-install.txt | cut -d: -f2 | sed 's/ //g')
+# --- Check necessary files ---
+DOMAIN_FILE="/etc/xray/domain"
+LOG_FILE="~/log-install.txt"
 
-# --- Generate Trial Trojan User ---
-user="trial$(tr -dc 'A-Z0-9' </dev/urandom | head -c4)"
-uuid=$(cat /proc/sys/kernel/random/uuid)
-expired=1
-exp=$(date -d "${expired} days" +"%Y-%m-%d")
+[[ ! -f "$DOMAIN_FILE" ]] && { echo -e "${red}❌ Domain file not found at $DOMAIN_FILE!${nc}"; exit 1; }
+[[ ! -f $LOG_FILE ]] && { echo -e "${red}❌ log-install.txt not found!${nc}"; exit 1; }
 
-# --- Add User to Xray Config (requires markers #trojanws & #trojangrpc) ---
-sed -i '/#trojanws$/a\#! '"${user} ${exp}"'\
-},{"password": "'"${uuid}"'","email": "'"${user}"'"}' /etc/xray/config.json
+domain=$(cat "$DOMAIN_FILE")
 
-sed -i '/#trojangrpc$/a\#! '"${user} ${exp}"'\
-},{"password": "'"${uuid}"'","email": "'"${user}"'"}' /etc/xray/config.json
+# Assuming log-install.txt format is consistent: "TLS Port: 443" / "noneTLS Port: 80"
+tls=$(grep -w "TLS Port" "$LOG_FILE" | awk '{print $NF}')
+none=$(grep -w "noneTLS Port" "$LOG_FILE" | awk '{print $NF}')
 
-# --- Restart Services ---
-systemctl restart xray >/dev/null 2>&1 || true
-service cron restart >/dev/null 2>&1 || true
+[[ -z "$tls" || -z "$none" ]] && { echo -e "${red}❌ Port info (TLS/noneTLS) missing in log-install.txt!${nc}"; exit 1; }
 
-# --- Build Trojan Links ---
-trojanlink_tls="trojan://${uuid}@${domain}:${tls}?path=%2Ftrojan&security=tls&host=${domain}&type=ws&sni=${domain}#${user}"
-trojanlink_none="trojan://${uuid}@${domain}:${none}?path=%2Ftrojan&security=none&host=${domain}&type=ws#${user}"
-trojanlink_grpc="trojan://${uuid}@${domain}:${tls}?mode=gun&security=tls&type=grpc&serviceName=trojan-grpc&sni=${domain}#${user}"
-
-# --- Save Trial Info ---
-mkdir -p /etc/trojan/trial
-echo "${exp}" > /etc/trojan/trial/${user}.conf
-echo "Trojan Trial: ${user} | Exp: ${exp}" >> /etc/log-create-user.log
-
-# --- Setup Auto Cleaner Script ---
-cat > /usr/local/bin/trojan-cleaner <<'EOF'
-#!/bin/bash
-today=$(date +%Y-%m-%d)
-config="/etc/xray/config.json"
-
-for file in /etc/trojan/trial/*.conf; do
-    [ -e "$file" ] || continue
-    user=$(basename "$file" .conf)
-    exp=$(cat "$file")
-    if [[ $(date -d "$exp" +%s) -le $(date -d "$today" +%s) ]]; then
-        # Remove expired user from config
-        sed -i "/#! $user $exp/,/},/d" "$config"
-        rm -f "$file"
-        echo "Expired Trojan user $user removed on $today" >> /var/log/trojan-cleaner.log
-    fi
-done
-
-systemctl restart xray >/dev/null 2>&1
-EOF
-
-chmod +x /usr/local/bin/trojan-cleaner
-
-# --- Add Cron Job (if not exists) ---
-if ! crontab -l | grep -q "trojan-cleaner"; then
-    (crontab -l 2>/dev/null; echo "5 0 * * * /usr/local/bin/trojan-cleaner") | crontab -
+# --- Check/Install jq ---
+if ! command -v jq &> /dev/null; then
+  echo -e "${yellow}Installing jq for JSON manipulation...${nc}"
+  apt update && apt install -y jq || { echo -e "${red}❌ Failed to install jq!${nc}"; exit 1; }
 fi
 
-# --- Output Account Information ---
+# --- Generate user ---
+user="trial$(tr -dc 'A-Z0-9' </dev/urandom | head -c4)"
+password=$(cat /proc/sys/kernel/random/uuid) # Trojan uses password
+exp=$(date -d "+1 day" +"%Y-%m-%d")
+
+# --- Tambahkan ke config.json (multi-user) ---
+echo -e "[ ${green}INFO${nc} ] Adding new user '$user' to Xray config..."
+jq --arg pwd "$password" --arg usr "$user" \
+   '.inbounds[] |= if (.protocol == "trojan" and .streamSettings.network == "ws") then
+        .settings.clients += [{"password": $pwd, "email": $usr}]
+     elif (.protocol == "trojan" and .streamSettings.network == "grpc") then
+        .settings.clients += [{"password": $pwd, "email": $usr}]
+     else . end' \
+   /etc/xray/config.json > /tmp/config.json.tmp 
+
+if [[ $? -ne 0 ]]; then
+  echo -e "${red}❌ Failed to update config.json! Reverting changes...${nc}"
+  rm -f /tmp/config.json.tmp
+  exit 1
+fi
+
+mv /tmp/config.json.tmp /etc/xray/config.json
+
+# --- Simpan info trial ---
+mkdir -p /etc/trojan/trial
+echo "$exp" > "/etc/trojan/trial/${user}.conf"
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Trojan Trial: $user | Exp: $exp" >> /etc/log-create-user.log
+
+# --- Restart Xray ---
+echo -e "[ ${green}INFO${nc} ] Restarting Xray service..."
+systemctl restart xray
+
+# --- Buat link Trojan ---
+trojanlink_tls="trojan://${password}@${domain}:${tls}?path=%2Ftrojan&security=tls&type=ws&host=${domain}&sni=${domain}#${user}"
+trojanlink_none="trojan://${password}@${domain}:${none}?path=%2Ftrojan&type=ws&host=${domain}#${user}"
+trojanlink_grpc="trojan://${password}@${domain}:${tls}?security=tls&type=grpc&serviceName=trojan-grpc&sni=${domain}#${user}"
+
+# --- Tampilkan hasil ---
 clear
 echo -e "${red}=========================================${nc}"
 echo -e "${blue}           TRIAL TROJAN ACCOUNT          ${nc}"
 echo -e "${red}=========================================${nc}"
-echo -e "Remarks        : ${user}"
-echo -e "Host / Domain  : ${domain}"
-echo -e "Wildcard Bug   : bug.com.${domain}"
-echo -e "Port TLS       : ${tls}"
-echo -e "Port none TLS  : ${none}"
-echo -e "Port gRPC      : ${tls}"
-echo -e "Password (UUID): ${uuid}"
-echo -e "Path           : /trojan"
-echo -e "Service Name   : trojan-grpc"
+echo -e "Remarks        : ${yellow}${user}${nc}"
+echo -e "Host / Domain  : ${yellow}${domain}${nc}"
+echo -e "Port TLS       : ${yellow}${tls}${nc}"
+echo -e "Port none TLS  : ${yellow}${none}${nc}"
+echo -e "Port gRPC      : ${yellow}${tls}${nc}"
+echo -e "Password       : ${yellow}${password}${nc}"
+echo -e "Network        : ${yellow}ws / grpc${nc}"
+echo -e "Path (WS)      : ${yellow}/trojan${nc}"
+echo -e "Service Name   : ${yellow}trojan-grpc${nc}"
+echo -e "Expired On     : ${yellow}${exp} (1 Day)${nc}"
 echo -e "${red}=========================================${nc}"
-echo -e "Link TLS       : ${trojanlink_tls}"
+echo -e "Link TLS (WS)  : ${trojanlink_tls}"
 echo -e "${red}=========================================${nc}"
-echo -e "Link none TLS  : ${trojanlink_none}"
+echo -e "Link none TLS (WS): ${trojanlink_none}"
 echo -e "${red}=========================================${nc}"
-echo -e "Link gRPC      : ${trojanlink_grpc}"
+echo -e "Link TLS (gRPC): ${trojanlink_grpc}"
 echo -e "${red}=========================================${nc}"
-echo -e "Expired On     : ${exp}"
-echo -e "${red}=========================================${nc}"
-echo ""
-read -n 1 -s -r -p "Press any key to return to menu"
-sleep 1
-m-trojan
+
+# --- Install Auto-cleaner Script ---
+CLEANER_SCRIPT="/usr/local/bin/trojan-cleaner"
+echo -e "[ ${yellow}INFO${nc} ] Installing daily cleaner cron job..."
+
+cat > "$CLEANER_SCRIPT" << 'EOF'
+#!/bin/bash
+# Trojan Trial Cleaner
+CONFIG="/etc/xray/config.json"
+TRIAL_DIR="/etc/trojan/trial"
+LOG="/var/log/trojan-cleaner.log"
+
+# Check if jq is available
+if ! command -v jq &> /dev/null; then
+    echo "$(date): ERROR: jq not found for cleaning. Exiting." >> "$LOG"
+    exit 1
+fi
+
+mkdir -p "$(dirname "$LOG")"
+touch "$LOG"
+
+for file in "$TRIAL_DIR"/*.conf; do
+  [ -e "$file" ] || continue
+  user=$(basename "$file" .conf)
+  exp=$(cat "$file")
+  exp_ts=$(date -d "$exp" +%s 2>/dev/null || echo 0)
+  now_ts=$(date +%s)
+
+  if [ "$exp_ts" -le "$now_ts" ] 2>/dev/null; then
+    echo "$(date): Removing expired Trojan user: $user (Expired: $exp)" >> "$LOG"
+    
+    # Hapus dari config.json
+    if jq --arg u "$user" 'del(.inbounds[]?.settings.clients[]? | select(.email == $u))' "$CONFIG" > "$CONFIG.tmp"; then
+        mv "$CONFIG.tmp" "$CONFIG"
+        rm -f "$file"
+    else
+        echo "$(date): WARNING: Failed to remove $user from config.json using jq." >> "$LOG"
+    fi
+  fi
+done
+
+# Restart Xray only if config was potentially modified (to ensure changes apply)
+if [ -f "$CONFIG.tmp" ]; then
+    systemctl restart xray
+fi
+EOF
+
+chmod +x "$CLEANER_SCRIPT"
+
+# --- Add cron job (daily at 00:05) ---
+(crontab -l 2>/dev/null | grep -v "trojan-cleaner"; echo "5 0 * * * $CLEANER_SCRIPT >/dev/null 2>&1") | crontab -
+
+# --- Kembali ke menu ---
+read -n 1 -s -r -p "Press any key to return to menu..."
+return_to_menu

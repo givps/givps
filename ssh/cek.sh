@@ -1,9 +1,9 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
-# Title   : Auto Script VPS to Create VPN on Debian & Ubuntu Server
-# Version : 1.0
-# Author  : gilper0x
+# Name    : active-session-checker
+# Title   : Auto Script VPS to Display Active VPN and SSH Sessions
+# Version : 1.1 (Revised for Reliability using 'w' and 'ps')
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
@@ -11,7 +11,6 @@
 # --- Colors ---
 red='\e[1;31m'
 green='\e[0;32m'
-yellow='\e[1;33m'
 blue='\e[1;34m'
 nc='\e[0m'
 
@@ -19,95 +18,91 @@ nc='\e[0m'
 MYIP=$(wget -qO- ipv4.icanhazip.com)
 clear
 
-# Detect authentication log file
-if [ -e "/var/log/auth.log" ]; then
-    LOG="/var/log/auth.log"
-elif [ -e "/var/log/secure" ]; then
-    LOG="/var/log/secure"
-else
-    echo "No authentication log file found!"
-    exit 1
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# DROPBEAR LOGINS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-pids=( $(ps aux | grep -i dropbear | awk '{print $2}') )
-echo -e "${red}=========================================${nc}"
-echo -e "${blue}           Active Dropbear Sessions       ${nc}"
-echo -e "${red}=========================================${nc}"
-echo "PID   |  Username   |  IP Address"
-echo -e "${red}=========================================${nc}"
-
-grep -i "dropbear" "$LOG" | grep -i "Password auth succeeded" > /tmp/login-db.txt
-for PID in "${pids[@]}"; do
-    grep "dropbear\[$PID\]" /tmp/login-db.txt > /tmp/login-db-pid.txt
-    if [ -s /tmp/login-db-pid.txt ]; then
-        USER=$(awk '{print $10}' /tmp/login-db-pid.txt | head -n1)
-        IP=$(awk '{print $12}' /tmp/login-db-pid.txt | head -n1)
-        echo "$PID   |  $USER   |  $IP"
-    fi
-done
-echo -e "${red}=========================================${nc}"
-echo ""
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# OPENSSH LOGINS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-echo -e "${red}=========================================${nc}"
-echo -e "${blue}            Active OpenSSH Sessions       ${nc}"
-echo -e "${red}=========================================${nc}"
-echo "PID   |  Username   |  IP Address"
-echo -e "${red}=========================================${nc}"
-
-grep -i "sshd" "$LOG" | grep -i "Accepted password for" > /tmp/login-ssh.txt
-pids=( $(ps aux | grep "\[priv\]" | awk '{print $2}') )
-for PID in "${pids[@]}"; do
-    grep "sshd\[$PID\]" /tmp/login-ssh.txt > /tmp/login-ssh-pid.txt
-    if [ -s /tmp/login-ssh-pid.txt ]; then
-        USER=$(awk '{print $9}' /tmp/login-ssh-pid.txt | head -n1)
-        IP=$(awk '{print $11}' /tmp/login-ssh-pid.txt | head -n1)
-        echo "$PID   |  $USER   |  $IP"
-    fi
-done
-echo -e "${red}=========================================${nc}"
-echo ""
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# OPENVPN TCP LOGINS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if [ -f "/etc/openvpn/server/openvpn-tcp.log" ]; then
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}          Active OpenVPN TCP Sessions     ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo "Username   |  IP Address   |  Connected Since"
-    echo -e "${red}=========================================${nc}"
-    grep -w "^CLIENT_LIST" /etc/openvpn/server/openvpn-tcp.log \
-        | cut -d ',' -f 2,3,8 \
-        | sed -e 's/,/      /g'
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# OPENVPN UDP LOGINS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if [ -f "/etc/openvpn/server/openvpn-udp.log" ]; then
+# --- Session Display Function ---
+display_sessions() {
+    clear
+    echo "Checking VPS IP: $MYIP"
     echo ""
-    echo -e "${red}=========================================${nc}"
-    echo -e "${blue}          Active OpenVPN UDP Sessions     ${nc}"
-    echo -e "${red}=========================================${nc}"
-    echo "Username   |  IP Address   |  Connected Since"
-    echo -e "${red}=========================================${nc}"
-    grep -w "^CLIENT_LIST" /etc/openvpn/server/openvpn-udp.log \
-        | cut -d ',' -f 2,3,8 \
-        | sed -e 's/,/      /g'
-fi
-echo -e "${red}=========================================${nc}"
-echo ""
 
-# Cleanup temporary files
-rm -f /tmp/login-db.txt /tmp/login-db-pid.txt
-rm -f /tmp/login-ssh.txt /tmp/login-ssh-pid.txt
+    # ----------------------------------------------------
+    # 1. SSH (OpenSSH and Dropbear using reliable process check)
+    # ----------------------------------------------------
+    echo -e "${red}=========================================${nc}"
+    echo -e "${blue}        Active SSH & Dropbear Sessions    ${nc}"
+    echo -e "${red}=========================================${nc}"
+    echo "PID   | User           | Source IP   | Login Type"
+    echo -e "${red}-----------------------------------------${nc}"
+
+    # Use 'ps' to find active SSH (sshd: user@) and Dropbear processes
+    # Filter only processes that represent an authenticated session (not the master or unprivileged process)
+    ps aux | grep -E 'sshd: .+@|dropbear' | grep -vE 'grep|/usr/sbin/sshd -D|dropbear -[RE]' | while read -r line; do
+        PID=$(echo "$line" | awk '{print $2}')
+        USER=$(echo "$line" | awk '{print $1}')
+        CMD=$(echo "$line" | awk '{for (i=11; i<=NF; i++) printf "%s ", $i}')
+        
+        LOGIN_TYPE=""
+        
+        # Check for standard OpenSSH session command line
+        if [[ "$CMD" =~ ^sshd:.+@ ]]; then
+            # Extract IP from the sshd process title
+            IP=$(echo "$CMD" | grep -oP 'from\s+\K[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+            LOGIN_TYPE="OpenSSH"
+        # Check for Dropbear session command line
+        elif [[ "$CMD" =~ dropbear ]]; then
+            # Find the peer IP by checking network connections (ss)
+            IP=$(ss -tnp | grep "$PID" | awk '{print $NF}' | grep -oP '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+            LOGIN_TYPE="Dropbear"
+        else
+            continue # Skip non-session processes
+        fi
+
+        # Filter out system users (UID < 1000) for clean display
+        if [[ $(id -u "$USER" 2>/dev/null) -ge 1000 ]]; then
+            printf "%-5s | %-14s | %-11s | %s\n" "$PID" "$USER" "${IP:-N/A}" "$LOGIN_TYPE"
+        fi
+    done
+    
+    echo -e "${red}=========================================${nc}"
+    echo ""
+
+    # ----------------------------------------------------
+    # 2. OpenVPN Sessions (TCP and UDP)
+    # ----------------------------------------------------
+    
+    # Function to parse and display OpenVPN status log
+    parse_openvpn_log() {
+        local log_file=$1
+        local protocol=$2
+
+        if [ -f "$log_file" ] && grep -q "^CLIENT_LIST" "$log_file"; then
+            echo -e "${red}=========================================${nc}"
+            echo -e "${blue}          Active OpenVPN $protocol Sessions     ${nc}"
+            echo -e "${red}=========================================${nc}"
+            echo "Username   |  IP Address   |  Connected Since"
+            echo -e "${red}-----------------------------------------${nc}"
+            
+            # Use grep and cut to extract relevant fields: Client Name (2), Real Address (3), Connected Since (8)
+            grep -w "^CLIENT_LIST" "$log_file" \
+                | cut -d ',' -f 2,3,8 \
+                | sed -e 's/,/      /g'
+            
+            echo -e "${red}=========================================${nc}"
+            echo ""
+        fi
+    }
+
+    # Check and display OpenVPN TCP sessions
+    parse_openvpn_log "/etc/openvpn/server/openvpn-tcp.log" "TCP"
+
+    # Check and display OpenVPN UDP sessions
+    parse_openvpn_log "/etc/openvpn/server/openvpn-udp.log" "UDP"
+
+}
+
+# --- Main Execution ---
+display_sessions
 
 read -n 1 -s -r -p "Press any key to return to the menu..."
 
-m-sshovpn
+# Execute the presumed main menu function
+m-sshovpn 2>/dev/null || exit 0

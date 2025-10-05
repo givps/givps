@@ -1,79 +1,124 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
+# Name    : renew-vless
 # Title   : Auto Script VPS - Renew VLESS Account
-# Version : 1.0
-# Author  : gilper0x
+# Version : 1.2 (Revised)
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
 
 # --- Colors ---
-red='\e[1;31m'    # Bright Red
-green='\e[0;32m'  # Green
-yellow='\e[1;33m' # Bright Yellow
-blue='\e[1;34m'   # Bright Blue
-nc='\e[0m'        # No Color (reset)
+red='\e[1;31m'
+green='\e[0;32m'
+yellow='\e[1;33m'
+blue='\e[1;34m'
+nc='\e[0m'
 
-# --- Get VPS IP ---
-MYIP=$(wget -qO- ipv4.icanhazip.com)
-echo -e "${green}Checking VPS...${nc}"
 clear
+echo -e "${green}Checking VPS...${nc}"
+sleep 0.5
 
-# --- Check Existing Clients ---
-NUMBER_OF_CLIENTS=$(grep -c -E "^#& " "/etc/xray/config.json")
-if [[ ${NUMBER_OF_CLIENTS} == '0' ]]; then
+USER_FILE="/etc/xray/vless-users"
+
+# --- Function to return to menu ---
+return_to_menu() {
+    if declare -f m-vless >/dev/null 2>&1; then m-vless; else exit 0; fi
+}
+
+# --- Check for existing users ---
+if [[ ! -f "$USER_FILE" ]] || [[ ! -s "$USER_FILE" ]]; then
     clear
     echo -e "${red}=========================================${nc}"
     echo -e "${blue}          ⇱ RENEW VLESS ⇲           ${nc}"
     echo -e "${red}=========================================${nc}"
     echo ""
-    echo "  • You have no existing VLESS clients!"
+    echo "  • ${yellow}You have no existing VLESS clients!${nc}"
     echo ""
     echo -e "${red}=========================================${nc}"
-    read -n 1 -s -r -p "   Press any key to return to menu"
-    m-vless
+    read -n 1 -s -r -p "Press any key to return to menu..."
+    return_to_menu
 fi
 
-# --- Show Clients ---
+# --- Display user list ---
 clear
 echo -e "${red}=========================================${nc}"
 echo -e "${blue}          ⇱ RENEW VLESS ⇲           ${nc}"
 echo -e "${red}=========================================${nc}"
+echo "  #    User        UUID        Expired"
+echo -e "${red}=========================================${nc}"
+# User file format: user uuid expired
+mapfile -t USER_LIST < <(awk '{print $1}' "$USER_FILE")
+awk '{printf "  %s.  %s\t%s\t%s\n", NR, $1, $2, $3}' "$USER_FILE" | column -t
 echo ""
-grep -E "^#& " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | column -t | sort | uniq
+echo -e "  • [NOTE] Press ENTER without input to return to menu."
+echo -e "${red}=========================================${nc}"
+
+# --- Input username/number ---
+read -rp "Input Username or Number: " selection
+
+if [[ -z "$selection" ]]; then
+    return_to_menu
+fi
+
+# Determine selected user
+selected_user=""
+if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -gt 0 ]] && [[ "$selection" -le ${#USER_LIST[@]} ]]; then
+    # User selected by number
+    selected_user="${USER_LIST[$selection-1]}"
+else
+    # User input username directly
+    selected_user="$selection"
+fi
+
+# --- Check if the user exists ---
+if ! grep -q "^$selected_user " "$USER_FILE"; then
+    echo -e "\n${red}❌ User '$selected_user' not found!${nc}"
+    sleep 2
+    return_to_menu
+fi
+
+# --- Input extension period ---
+read -rp "Extend (days): " expired
+# Set default to 30 days if input is empty or non-numeric
+if ! [[ "$expired" =~ ^[0-9]+$ ]]; then
+    expired=30
+    echo -e "[ ${yellow}NOTE${nc} ] Defaulting extension to $expired days."
+fi
+
+# --- Calculate new expiry date ---
+# $3 is the expiration date in /etc/xray/vless-users
+current_exp_date=$(awk -v usr="$selected_user" '$1 == usr {print $3; exit}' "$USER_FILE")
+new_exp_date=$(date -d "$current_exp_date + $expired days" +"%Y-%m-%d")
+
+# --- Get existing data ---
+user_data=$(grep -E "^$selected_user " "$USER_FILE")
+uuid=$(echo "$user_data" | awk '{print $2}')
+
+# --- Update user file ---
+echo -e "[ ${green}INFO${nc} ] Updating expiration date to $new_exp_date..."
+
+# 1. Write the new user line to a temp file: User UUID New_Expiry
+echo "$selected_user $uuid $new_exp_date" > /tmp/vless-new
+
+# 2. Append all other users (excluding the renewed user)
+grep -v "^$selected_user " "$USER_FILE" >> /tmp/vless-new
+
+# 3. Replace the original file
+mv /tmp/vless-new "$USER_FILE"
+
+# Restart Xray (optional for VLESS, as UUID doesn't change, but fine for consistency)
+systemctl restart xray >/dev/null 2>&1
+
+# --- Display result ---
+clear
+echo -e "${red}=========================================${nc}"
+echo -e "   ${green}VLESS Account Has Been Successfully Renewed!${nc}"
+echo -e "${red}=========================================${nc}"
+echo ""
+echo "   • Client Name : ${yellow}$selected_user${nc}"
+echo "   • Expired On  : ${yellow}$new_exp_date${nc}"
 echo ""
 echo -e "${red}=========================================${nc}"
-read -rp "   Input Username : " user
-
-if [[ -z "$user" ]]; then
-    m-vless
-else
-    read -rp "   Extend (days) : " expired
-
-    # Get current expiration date
-    exp=$(grep -wE "^#& $user" "/etc/xray/config.json" | cut -d ' ' -f 3 | sort | uniq)
-    now=$(date +%Y-%m-%d)
-    d1=$(date -d "$exp" +%s)
-    d2=$(date -d "$now" +%s)
-    exp2=$(( (d1 - d2) / 86400 ))
-    exp3=$((exp2 + expired))
-    exp4=$(date -d "$exp3 days" +"%Y-%m-%d")
-
-    # Update config
-    sed -i "/#& $user/c\#& $user $exp4" /etc/xray/config.json
-    systemctl restart xray > /dev/null 2>&1
-
-    # --- Result ---
-    clear
-    echo -e "${red}=========================================${nc}"
-    echo "   VLESS Account Has Been Successfully Renewed"
-    echo -e "${red}=========================================${nc}"
-    echo ""
-    echo "   • Client Name : $user"
-    echo "   • Expired On  : $exp4"
-    echo ""
-    echo -e "${red}=========================================${nc}"
-    read -n 1 -s -r -p "   Press any key to return to menu"
-    m-vless
-fi
+read -n 1 -s -r -p "Press any key to return to menu..."
+return_to_menu

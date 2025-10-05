@@ -1,9 +1,9 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
+# Name    : initial-vps-setup
 # Title   : Auto Script VPS - VPN Manager for Debian & Ubuntu
-# Version : 1.0
-# Author  : gilper0x
+# Version : 1.1 (Security and Reliability Hardening)
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
@@ -15,54 +15,64 @@ yellow='\e[1;33m'
 blue='\e[1;34m'
 nc='\e[0m'
 
-# non-interactive mode
+# --- Configuration ---
+# Exit immediately if a command exits with a non-zero status
+set -eo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-# get IP VPS
-MYIP=$(wget -qO- ipv4.icanhazip.com)
+# Get IP VPS
+MYIP=$(wget -qO- ipv4.icanhazip.com 2>/dev/null || ip a | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | grep -vE '^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^10\.|^127\.|^255\.|^0\.' | head -n 1)
+
+# Check if IP was found
+if [[ -z "$MYIP" ]]; then
+    echo -e "${red}FATAL: Could not determine public IP address. Exiting.${nc}"
+    exit 1
+fi
 MYIP2="s/xxxxxxxxx/$MYIP/g"
-NET=$(ip -o -4 route show to default | awk '{print $5}')
-source /etc/os-release
-ver=$VERSION_ID
 
-# detail organizations
-country=ID
-state=Indonesia
-locality=Jakarta
-organization=none
-organizationalunit=none
-commonname=none
-email=none
+# detail organizations for SSL cert
+COUNTRY="ID"
+STATE="Indonesia"
+LOCALITY="Jakarta"
+ORGANIZATION="VPN-Service"
+ORG_UNIT="IT-Support"
+COMMON_NAME="$MYIP"
+EMAIL="admin@$MYIP.com"
 
-# update and upgrade
+# --- System Preparation ---
+echo -e "${green}=== 1. System Update and Essential Tools ===${nc}"
 apt update -y
 apt dist-upgrade -y
-apt-get remove --purge -y ufw firewalld exim4
+# Use --auto-remove instead of --purge -y ufw... for cleaner removal
+apt-get remove --auto-remove -y ufw firewalld exim4 2>/dev/null || true
 
-# install tools
+# Install tools
 apt install -y \
     screen curl jq bzip2 gzip vnstat coreutils rsyslog iftop zip unzip git \
-    apt-transport-https build-essential figlet ruby python make cmake \
+    apt-transport-https build-essential figlet ruby python3 make cmake \
     net-tools nano sed gnupg gnupg1 bc dirmngr libxml-parser-perl neofetch \
     lsof libsqlite3-dev libz-dev gcc g++ libreadline-dev zlib1g-dev \
     libssl-dev libssl1.0-dev dos2unix fail2ban dropbear stunnel4 \
-    wget curl shc
+    wget curl shc netfilter-persistent iptables-persistent
 
-# password policy
-curl -sS https://raw.githubusercontent.com/givps/givps/master/ssh/password \
-  | openssl aes-256-cbc -d -a -pass pass:scvps07gg -pbkdf2 > /etc/pam.d/common-password
-chmod +x /etc/pam.d/common-password
+# --- WARNING: REMOVING RISKY PASSWORD POLICY CHANGE ---
+# The original script downloaded and replaced /etc/pam.d/common-password via a
+# hardcoded key. This is a severe security risk. It has been removed.
+# To enforce modern password policy, we install pwquality.
+echo -e "${yellow}Removed risky password policy download.${nc}"
+apt install -y libpam-pwquality 2>/dev/null || true
 
-# timezone
+# --- Timezone and Locale ---
+echo -e "${green}=== 2. Timezone and SSH Locale ===${nc}"
 ln -fs /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
+# Disable locale environment passing to prevent SSH login delays
+sed -i 's/^AcceptEnv/#AcceptEnv/g' /etc/ssh/sshd_config
 
-# locale
-sed -i 's/AcceptEnv/#AcceptEnv/g' /etc/ssh/sshd_config
-
-# rc.local service
+# --- rc.local Service Setup (Standard Systemd Method) ---
+echo -e "${green}=== 3. rc.local and IPv6 Disable ===${nc}"
 cat > /etc/systemd/system/rc-local.service <<-EOF
 [Unit]
-Description=/etc/rc.local
+Description=/etc/rc.local compatibility
 ConditionPathExists=/etc/rc.local
 [Service]
 Type=forking
@@ -70,61 +80,78 @@ ExecStart=/etc/rc.local start
 TimeoutSec=0
 StandardOutput=tty
 RemainAfterExit=yes
-SysVStartPriority=99
 [Install]
 WantedBy=multi-user.target
 EOF
 
 cat > /etc/rc.local <<-EOF
 #!/bin/sh -e
+# Disable IPv6 permanently
+echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
 exit 0
 EOF
 chmod +x /etc/rc.local
+systemctl daemon-reload
 systemctl enable rc-local
-systemctl start rc-local.service
+systemctl start rc-local.service 2>/dev/null || true
 
-# disable ipv6 permanen
+# Immediate disable ipv6
 echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
-echo "echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6" >> /etc/rc.local
 
-# nginx & web
+# --- Nginx and Web Server ---
+echo -e "${green}=== 4. Nginx and Web Root Setup ===${nc}"
 apt install -y nginx
-rm -f /etc/nginx/sites-enabled/default
-rm -f /etc/nginx/sites-available/default
-wget -O /etc/nginx/nginx.conf "https://raw.githubusercontent.com/givps/givps/master/ssh/nginx.conf"
-wget -O /etc/nginx/conf.d/vps.conf "https://raw.githubusercontent.com/givps/givps/master/ssh/vps.conf"
+rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default 2>/dev/null
+# Fetch Nginx configuration files
+wget -q -O /etc/nginx/nginx.conf "https://raw.githubusercontent.com/givps/givps/master/ssh/nginx.conf"
+wget -q -O /etc/nginx/conf.d/vps.conf "https://raw.githubusercontent.com/givps/givps/master/ssh/vps.conf"
 systemctl daemon-reload
 systemctl restart nginx
 
 mkdir -p /home/vps/public_html
-wget -O /home/vps/public_html/index.html "https://raw.githubusercontent.com/givps/givps/master/ssh/index"
-wget -O /home/vps/public_html/.htaccess "https://raw.githubusercontent.com/givps/givps/master/ssh/.htaccess"
+wget -q -O /home/vps/public_html/index.html "https://raw.githubusercontent.com/givps/givps/master/ssh/index"
+wget -q -O /home/vps/public_html/.htaccess "https://raw.githubusercontent.com/givps/givps/master/ssh/.htaccess"
+chown -R www-data:www-data /home/vps/public_html
 
-# badvpn-udpgw
-wget -O install-udpgw-unified "https://raw.githubusercontent.com/givps/givps/master/ssh/install-udpgw-unified.sh"
+# --- badvpn-udpgw ---
+echo -e "${green}=== 5. Badvpn-udpgw Installation ===${nc}"
+wget -q -O install-udpgw-unified "https://raw.githubusercontent.com/givps/givps/master/ssh/install-udpgw-unified.sh"
 chmod +x install-udpgw-unified
 ./install-udpgw-unified
 
-# add port SSH
+# --- OpenSSH Configuration ---
+echo -e "${green}=== 6. OpenSSH Hardening ===${nc}"
+# Add extra ports for OpenSSH
 for port in 500 40000 81 110 51443 58080 666 200 2222 2269; do
-    if ! grep -q "Port $port" /etc/ssh/sshd_config; then
+    if ! grep -q "^Port $port" /etc/ssh/sshd_config; then
         echo "Port $port" >> /etc/ssh/sshd_config
     fi
 done
 systemctl restart ssh
 
-# dropbear
+# --- Dropbear Configuration ---
+echo -e "${green}=== 7. Dropbear Configuration ===${nc}"
 sed -i 's/NO_START=1/NO_START=0/' /etc/default/dropbear
+# Remove conflicting default 22 port, set main ports
 sed -i 's/DROPBEAR_PORT=22/DROPBEAR_PORT=143/' /etc/default/dropbear
+# Add extra ports (50000, 109, 110, 69)
 sed -i 's@DROPBEAR_EXTRA_ARGS=@DROPBEAR_EXTRA_ARGS="-p 50000 -p 109 -p 110 -p 69"@' /etc/default/dropbear
+# Add /bin/false and /usr/sbin/nologin to shells for user creation safety
 echo "/bin/false" >> /etc/shells
 echo "/usr/sbin/nologin" >> /etc/shells
 systemctl restart dropbear
 
-# stunnel
+# --- Stunnel4 Configuration ---
+echo -e "${green}=== 8. Stunnel4 (SSL/TLS Tunnel) ===${nc}"
+# Use defined variables for certificate generation
+OPENSSL_SUBJECT="/C=$COUNTRY/ST=$STATE/L=$LOCALITY/O=$ORGANIZATION/OU=$ORG_UNIT/CN=$COMMON_NAME/emailAddress=$EMAIL"
+
 cat > /etc/stunnel/stunnel.conf <<-EOF
 cert = /etc/stunnel/stunnel.pem
 client = no
+socket = l:TCP_NODELAY=1
+socket = r:TCP_NODELAY=1
+
 [dropbear-ssh] 
 accept = 222
 connect = 127.0.0.1:22
@@ -139,30 +166,37 @@ accept = 442
 connect = 127.0.0.1:1194
 EOF
 
+# Generate SSL certificate
 openssl genrsa -out key.pem 2048
-openssl req -new -x509 -key key.pem -out cert.pem -days 1095 \
--subj "/C=$country/ST=$state/L=$locality/O=$organization/OU=$organizationalunit/CN=$commonname/emailAddress=$email"
+openssl req -new -x509 -key key.pem -out cert.pem -days 1095 -subj "$OPENSSL_SUBJECT"
 cat key.pem cert.pem >> /etc/stunnel/stunnel.pem
 rm -f key.pem cert.pem
 sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/stunnel4
 systemctl enable stunnel4
 systemctl restart stunnel4
 
-# banner
-wget -O /etc/issue.net "https://raw.githubusercontent.com/givps/givps/master/banner/banner.conf"
+# --- Banner Setup ---
+echo -e "${green}=== 9. Login Banner ===${nc}"
+wget -q -O /etc/issue.net "https://raw.githubusercontent.com/givps/givps/master/banner/banner.conf"
 echo "Banner /etc/issue.net" >> /etc/ssh/sshd_config
 sed -i 's@DROPBEAR_BANNER=""@DROPBEAR_BANNER="/etc/issue.net"@' /etc/default/dropbear
 
-# ddos deflate
+# --- DDoS Deflate ---
+echo -e "${green}=== 10. Install DDoS Deflate ===${nc}"
 if [ ! -d "/usr/local/ddos" ]; then
     mkdir /usr/local/ddos
     wget -q -O /usr/local/ddos/ddos.sh http://www.inetbase.com/scripts/ddos/ddos.sh
     chmod 0755 /usr/local/ddos/ddos.sh
     ln -s /usr/local/ddos/ddos.sh /usr/local/sbin/ddos
+    # Run setup to add cron job
     /usr/local/ddos/ddos.sh --cron >/dev/null 2>&1
 fi
 
-# blocking torrent
+# --- Blocking Torrent Traffic (FORWARD Chain for VPN clients) ---
+echo -e "${green}=== 11. Blocking Torrent Keywords ===${nc}"
+# Clear existing rules related to this before adding new ones
+iptables -D FORWARD -m string --algo bm --string "get_peers" -j DROP 2>/dev/null || true
+
 for key in "get_peers" "announce_peer" "find_node" "BitTorrent" \
 "BitTorrent protocol" "peer_id=" ".torrent" "announce.php?passkey=" \
 "torrent" "announce" "info_hash"; do
@@ -171,66 +205,93 @@ done
 netfilter-persistent save
 netfilter-persistent reload
 
-# download all menu
+# --- 12. Download Menu Files and Scripts ---
+echo -e "${green}=== Downloading Menu and Utility Scripts ===${nc}"
 cd /usr/bin
-wget -q -O menu "https://raw.githubusercontent.com/givps/givps/master/menu/menu.sh"
-wget -q -O m-vmess "https://raw.githubusercontent.com/givps/givps/master/menu/m-vmess.sh"
-wget -q -O m-vless "https://raw.githubusercontent.com/givps/givps/master/menu/m-vless.sh"
-wget -q -O running "https://raw.githubusercontent.com/givps/givps/master/menu/running.sh"
-wget -q -O clearcache "https://raw.githubusercontent.com/givps/givps/master/menu/clearcache.sh"
-wget -q -O m-ssws "https://raw.githubusercontent.com/givps/givps/master/menu/m-ssws.sh"
-wget -q -O m-trojan "https://raw.githubusercontent.com/givps/givps/master/menu/m-trojan.sh"
-wget -q -O m-sshovpn "https://raw.githubusercontent.com/givps/givps/master/menu/m-sshovpn.sh"
-wget -q -O usernew "https://raw.githubusercontent.com/givps/givps/master/ssh/usernew.sh"
-wget -q -O trial "https://raw.githubusercontent.com/givps/givps/master/ssh/trial.sh"
-wget -q -O renew "https://raw.githubusercontent.com/givps/givps/master/ssh/renew.sh"
-wget -q -O delete "https://raw.githubusercontent.com/givps/givps/master/ssh/delete.sh"
-wget -q -O cek "https://raw.githubusercontent.com/givps/givps/master/ssh/cek.sh"
-wget -q -O member "https://raw.githubusercontent.com/givps/givps/master/ssh/member.sh"
-wget -q -O auto-delete "https://raw.githubusercontent.com/givps/givps/master/ssh/auto-delete.sh"
-wget -q -O auto-kill "https://raw.githubusercontent.com/givps/givps/master/ssh/auto-kill.sh"
-wget -q -O cek-user "https://raw.githubusercontent.com/givps/givps/master/ssh/cek-user.sh"
-wget -q -O auto-kick "https://raw.githubusercontent.com/givps/givps/master/ssh/auto-kick.sh"
-wget -q -O sshws "https://raw.githubusercontent.com/givps/givps/master/ssh/sshws.sh"
-wget -q -O user-lockunlock "https://raw.githubusercontent.com/givps/givps/master/ssh/user-lockunlock.sh"
-wget -q -O m-system "https://raw.githubusercontent.com/givps/givps/master/menu/m-system.sh"
-wget -q -O m-domain "https://raw.githubusercontent.com/givps/givps/master/menu/m-domain.sh"
-wget -q -O add-host "https://raw.githubusercontent.com/givps/givps/master/ssh/add-host.sh"
-wget -q -O xray-crt "https://raw.githubusercontent.com/givps/givps/master/xray/xray-crt.sh"
-wget -q -O auto-reboot "https://raw.githubusercontent.com/givps/givps/master/menu/auto-reboot.sh"
-wget -q -O restart "https://raw.githubusercontent.com/givps/givps/master/menu/restart.sh"
-wget -q -O cek-bw "https://raw.githubusercontent.com/givps/givps/master/menu/cek-bw.sh"
-wget -q -O m-tcp "https://raw.githubusercontent.com/givps/givps/master/menu/tcp.sh"
-wget -q -O xp "https://raw.githubusercontent.com/givps/givps/master/ssh/xp.sh"
-wget -q -O m-dns "https://raw.githubusercontent.com/givps/givps/master/menu/m-dns.sh"
+REPO_URL="https://raw.githubusercontent.com/givps/givps/master"
 
+# Array of scripts to download (using the latest stable names for clarity)
+declare -A scripts=(
+    [menu]="menu/menu.sh" 
+    [m-vmess]="menu/m-vmess.sh"
+    [m-vless]="menu/m-vless.sh"
+    [running]="menu/running.sh"
+    [clearcache]="menu/clearcache.sh"
+    [m-ssws]="menu/m-ssws.sh"
+    [m-trojan]="menu/m-trojan.sh"
+    [m-sshovpn]="menu/m-sshovpn.sh"
+    [usernew]="ssh/usernew.sh"
+    [trial]="ssh/trial.sh"
+    [renew]="ssh/renew.sh"
+    [delete]="ssh/delete.sh"
+    [cek]="ssh/cek.sh"
+    [member]="ssh/member.sh"
+    [auto-delete]="ssh/auto-delete.sh"
+    [auto-kill]="ssh/auto-kill.sh"
+    [cek-user]="ssh/cek-user.sh"
+    [auto-kick]="ssh/auto-kick.sh"
+    [sshws]="ssh/sshws.sh"
+    [user-lockunlock]="ssh/user-lockunlock.sh"
+    [m-system]="menu/m-system.sh"
+    [m-domain]="menu/m-domain.sh"
+    [add-host]="ssh/add-host.sh"
+    [xray-crt]="xray/xray-crt.sh"
+    [auto-reboot]="menu/auto-reboot.sh"
+    [restart]="menu/restart.sh"
+    [cek-bw]="menu/cek-bw.sh"
+    [m-tcp]="menu/tcp.sh"
+    [xp]="ssh/xp.sh"
+    [m-dns]="menu/m-dns.sh"
+)
+
+for cmd in "${!scripts[@]}"; do
+    wget -q -O "$cmd" "$REPO_URL/${scripts[$cmd]}"
+done
+
+# Set execution permissions
 chmod +x /usr/bin/*
 
-# cron jobs
+# --- 13. Cron Jobs ---
+echo -e "${green}=== Setting up Cron Jobs ===${nc}"
+# Standard auto reboot at 2 AM
 cat > /etc/cron.d/re_otm <<-EOF
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 0 2 * * * root /sbin/reboot
 EOF
 
+# Expired user check at midnight
 cat > /etc/cron.d/xp_otm <<-EOF
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 0 0 * * * root /usr/bin/xp
 EOF
 
-# install speedtest
+# --- 14. Final Cleanup and Finish ---
+echo -e "${green}=== Final Cleanup ===${nc}"
+# Install speedtest (using modern method)
 curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash
-apt-get install speedtest
+apt-get install -y speedtest || true
 
-# clear trash
+# Clear trash
 apt autoremove -y
 apt autoclean -y
 history -c
 echo "unset HISTFILE" >> /etc/profile
 
-# finishing
-systemctl restart nginx openvpn cron ssh dropbear fail2ban stunnel4 vnstat squid
-chown -R www-data:www-data /home/vps/public_html
+# Restart remaining services
+systemctl restart nginx cron ssh dropbear fail2ban stunnel4 vnstat 2>/dev/null || true
+
 clear
-echo -e "${green}[INFO] Setup done.${nc}"
+echo -e "${green}=========================================${nc}"
+echo -e "${blue}✅ Initial VPS Setup Completed Successfully! ✅${nc}"
+echo -e "${red}=========================================${nc}"
+echo -e "IP Address : $MYIP"
+echo -e "OpenSSH    : 22, ${PORT_OPENSSH}"
+echo -e "Dropbear   : 143, 109, 110, 69, 50000"
+echo -e "Stunnel4   : 222 (to SSH), 777 (to Dropbear 109), 2096 (to 700)"
+echo -e "Web Panel  : http://$MYIP:81"
+echo -e "UDPGW      : 7100-7900"
+echo -e "${red}=========================================${nc}"
+echo -e "Type ${yellow}menu${nc} to display the user management console."
+echo -e "${red}=========================================${nc}"

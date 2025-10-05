@@ -2,8 +2,8 @@
 # =========================================
 # Name    : givps
 # Title   : Auto Script VPS For Create VPN on Debian & Ubuntu Server
-# Version : 1.0
-# Author  : gilper0x
+# Version : 1.3 (Final Revision)
+# Author  : gilper0x & AI Assistant
 # Website : https://givps.com
 # License : The MIT License (MIT)
 # =========================================
@@ -15,86 +15,87 @@ yellow='\e[1;33m' # Bright Yellow
 blue='\e[1;34m'   # Bright Blue
 nc='\e[0m'        # No Color (reset)
 
-# Getting
+# Getting Public IP
 MYIP=$(wget -qO- ipv4.icanhazip.com);
+
+# --- 1. Validasi Domain ---
 echo -e "${green}Checking VPS...${nc}"
+
+# Asumsi domain sudah ada di /etc/xray/domain dari script sebelumnya
+if [ ! -f "/etc/xray/domain" ]; then
+    echo -e "${red}ERROR:${nc} File /etc/xray/domain tidak ditemukan. Domain harus ada untuk instalasi SSL."
+    echo "Harap pastikan domain Anda telah disiapkan."
+    exit 1
+fi
+
+DOMAIN=$(cat /etc/xray/domain | tr -d '\n')
+echo "$DOMAIN" > /root/domain
+sleep 1
 clear
-domen=$(cat /etc/xray/domain)
-echo "$domen" > /root/domain
-domain=$(cat /root/domain)
-sleep 1
-mkdir -p /etc/xray 
-echo -e "[ ${green}INFO${nc} ] Checking... "
-apt install iptables iptables-persistent -y
-sleep 1
-echo -e "[ ${green}INFO$nc ] Setting ntpdate"
+
+# --- 2. Persiapan Sistem & Dependencies ---
+echo -e "[ ${green}INFO${nc} ] Updating and installing dependencies..."
+
+# Stop services jika sudah berjalan
+systemctl stop nginx 2>/dev/null
+systemctl stop xray 2>/dev/null
+
+# Install dependencies dasar
+apt update -y
+apt install -y iptables iptables-persistent jq curl socat xz-utils wget apt-transport-https gnupg dnsutils lsb-release cron bash-completion chrony zip openssl netcat
+
+# Setting Waktu & NTP (Menggunakan chrony)
+echo -e "[ ${green}INFO${nc} ] Setting NTP (chrony)..."
 ntpdate pool.ntp.org 
 timedatectl set-ntp true
-sleep 1
-echo -e "[ ${green}INFO$nc ] Enable chronyd"
-systemctl enable chronyd
-systemctl restart chronyd
-sleep 1
-echo -e "[ ${green}INFO$nc ] Enable chrony"
 systemctl enable chrony
 systemctl restart chrony
 timedatectl set-timezone Asia/Jakarta
 sleep 1
-echo -e "[ ${green}INFO$nc ] Setting chrony tracking"
-chronyc sourcestats -v
-chronyc tracking -v
-echo -e "[ ${green}INFO$nc ] Setting dll"
-apt clean all && apt update
-apt install curl socat xz-utils wget apt-transport-https gnupg gnupg2 gnupg1 dnsutils lsb-release -y 
-apt install socat cron bash-completion ntpdate -y
-ntpdate pool.ntp.org
-apt -y install chrony
-apt install zip -y
-apt install curl pwgen openssl netcat cron -y
 
+# --- 3. Instalasi Xray Core ---
+echo -e "[ ${green}INFO${nc} ] Downloading & Installing Xray core (v1.6.1)..."
 
-# install xray
-sleep 1
-echo -e "[ ${green}INFO$nc ] Downloading & Installing xray core"
-domainSock_dir="/run/xray";! [ -d $domainSock_dir ] && mkdir  $domainSock_dir
-chown www-data.www-data $domainSock_dir
-# Make Folder XRay
+# Persiapan direktori Xray
 mkdir -p /var/log/xray
 mkdir -p /etc/xray
-chown www-data.www-data /var/log/xray
-chmod +x /var/log/xray
-touch /var/log/xray/access.log
-touch /var/log/xray/error.log
-touch /var/log/xray/access2.log
-touch /var/log/xray/error2.log
-# / / Ambil Xray Core Version Terbaru
+mkdir -p /home/vps/public_html
+chown www-data.www-data /var/log/xray /etc/xray
+touch /var/log/xray/access.log /var/log/xray/error.log /var/log/xray/access2.log /var/log/xray/error2.log
+
+# Instal Xray Core versi 1.6.1
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u www-data --version 1.6.1
 
-## crt xray
-systemctl stop nginx
-mkdir /root/.acme.sh
-curl https://acme-install.netlify.app/acme.sh -o /root/.acme.sh/acme.sh
-chmod +x /root/.acme.sh/acme.sh
+# --- 4. SSL Certificate (acme.sh) ---
+echo -e "[ ${green}INFO${nc} ] Generating SSL certificate using acme.sh..."
+
+# Instalasi dan konfigurasi acme.sh
+mkdir -p /root/.acme.sh
+curl -s https://get.acme.sh | sh
 /root/.acme.sh/acme.sh --upgrade --auto-upgrade
 /root/.acme.sh/acme.sh --set-default-ca --server letsencrypt
-/root/.acme.sh/acme.sh --issue -d $domain --standalone -k ec-256
-~/.acme.sh/acme.sh --installcert -d $domain --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key --ecc
+/root/.acme.sh/acme.sh --issue -d $DOMAIN --standalone -k ec-256
 
-# nginx renew ssl
-echo -n '#!/bin/bash
+# Menginstal sertifikat ke lokasi Xray
+~/.acme.sh/acme.sh --installcert -d $DOMAIN \
+    --fullchainpath /etc/xray/xray.crt \
+    --keypath /etc/xray/xray.key \
+    --ecc
+
+# Konfigurasi perpanjangan SSL otomatis via cron
+echo '#!/bin/bash
 /etc/init.d/nginx stop
 "/root/.acme.sh"/acme.sh --cron --home "/root/.acme.sh" &> /root/renew_ssl.log
 /etc/init.d/nginx start
-/etc/init.d/nginx status
 ' > /usr/local/bin/ssl_renew.sh
 chmod +x /usr/local/bin/ssl_renew.sh
-if ! grep -q 'ssl_renew.sh' /var/spool/cron/crontabs/root;then (crontab -l;echo "15 03 */3 * * /usr/local/bin/ssl_renew.sh") | crontab;fi
+if ! grep -q 'ssl_renew.sh' /var/spool/cron/crontabs/root;then (crontab -l 2>/dev/null;echo "15 03 */3 * * /usr/local/bin/ssl_renew.sh") | crontab;fi
 
-mkdir -p /home/vps/public_html
+# --- 5. Xray Configuration File (/etc/xray/config.json) ---
+UUID=$(cat /proc/sys/kernel/random/uuid)
+echo -e "[ ${green}INFO${nc} ] Configuring Xray with UUID: $UUID"
 
-# set uuid
-uuid=$(cat /proc/sys/kernel/random/uuid)
-# xray config
+# Xray config
 cat > /etc/xray/config.json << END
 {
   "log" : {
@@ -119,7 +120,7 @@ cat > /etc/xray/config.json << END
       "settings": {
           "decryption":"none",
             "clients": [
-               { "id": "${uuid}" }
+               { "id": "${UUID}", "email": "vless-ws" }
           ]
        },
        "streamSettings":{
@@ -133,7 +134,7 @@ cat > /etc/xray/config.json << END
      "protocol": "vmess",
       "settings": {
             "clients": [
-               { "id": "${uuid}", "alterId": 0 }
+               { "id": "${UUID}", "alterId": 0, "email": "vmess-ws" }
           ]
        },
        "streamSettings":{
@@ -147,7 +148,7 @@ cat > /etc/xray/config.json << END
       "protocol": "trojan",
       "settings": {
            "clients": [
-              { "password": "${uuid}" }
+              { "password": "${UUID}", "email": "trojan-ws" }
           ],
          "udp": true
        },
@@ -162,7 +163,7 @@ cat > /etc/xray/config.json << END
         "protocol": "shadowsocks",
         "settings": {
            "clients": [
-             { "method": "aes-128-gcm", "password": "${uuid}" }
+             { "method": "aes-128-gcm", "password": "${UUID}", "email": "ss-ws" }
            ],
           "network": "tcp,udp"
        },
@@ -178,7 +179,7 @@ cat > /etc/xray/config.json << END
         "settings": {
          "decryption":"none",
            "clients": [
-             { "id": "${uuid}" }
+             { "id": "${UUID}", "email": "vless-grpc" }
           ]
        },
           "streamSettings":{
@@ -192,7 +193,7 @@ cat > /etc/xray/config.json << END
       "protocol": "vmess",
       "settings": {
             "clients": [
-               { "id": "${uuid}", "alterId": 0 }
+               { "id": "${UUID}", "alterId": 0, "email": "vmess-grpc" }
           ]
        },
        "streamSettings":{
@@ -206,7 +207,7 @@ cat > /etc/xray/config.json << END
         "protocol": "trojan",
         "settings": {
              "clients": [
-               { "password": "${uuid}" }
+               { "password": "${UUID}", "email": "trojan-grpc" }
            ]
         },
          "streamSettings":{
@@ -220,7 +221,7 @@ cat > /etc/xray/config.json << END
     "protocol": "shadowsocks",
     "settings": {
         "clients": [
-          { "method": "aes-128-gcm", "password": "${uuid}" }
+          { "method": "aes-128-gcm", "password": "${UUID}", "email": "ss-grpc" }
          ],
            "network": "tcp,udp"
       },
@@ -280,15 +281,18 @@ cat > /etc/xray/config.json << END
 }
 END
 
-rm -rf /etc/systemd/system/xray.service.d
-rm -rf /etc/systemd/system/xray@.service
+# --- 6. Systemd Service Files ---
+echo -e "[ ${green}INFO${nc} ] Configuring systemd services..."
+rm -rf /etc/systemd/system/xray.service.d /etc/systemd/system/xray@.service /etc/systemd/system/runn.service
+
 cat <<EOF> /etc/systemd/system/xray.service
 Description=Xray Service
-Documentation=https://github.com/xtls
+Documentation=https://github.com/xtls  
 After=network.target nss-lookup.target
 
 [Service]
 User=www-data
+# Mengurangi kemampuan yang diberikan (Minimal Access/Security Best Practice)
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
@@ -300,145 +304,118 @@ LimitNOFILE=1000000
 
 [Install]
 WantedBy=multi-user.target
-
-EOF
-cat > /etc/systemd/system/runn.service <<EOF
-[Unit]
-Description=Xray Service
-After=network.target
-
-[Service]
-Type=simple
-ExecStartPre=-/usr/bin/mkdir -p /var/run/xray
-ExecStart=/usr/bin/chown www-data:www-data /var/run/xray
-Restart=on-abort
-
-[Install]
-WantedBy=multi-user.target
 EOF
 
-#nginx config
+# Menghapus runn.service (berlebihan dan tidak diperlukan)
+# rm -f /etc/systemd/system/runn.service
+
+# --- 7. Nginx Configuration File (/etc/nginx/conf.d/xray.conf) ---
+echo -e "[ ${green}INFO${nc} ] Configuring Nginx proxy..."
+
 cat >/etc/nginx/conf.d/xray.conf <<EOF
     server {
-             listen 80;
-             listen [::]:80;
-             listen 443 ssl http2 reuseport;
-             listen [::]:443 http2 reuseport;	
-             server_name *.$domain;
-             ssl_certificate /etc/xray/xray.crt;
-             ssl_certificate_key /etc/xray/xray.key;
-             ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+ECDSA+AES128:EECDH+aRSA+AES128:RSA+AES128:EECDH+ECDSA+AES256:EECDH+aRSA+AES256:RSA+AES256:EECDH+ECDSA+3DES:EECDH+aRSA+3DES:RSA+3DES:!MD5;
-             ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
-             root /home/vps/public_html;
+        listen 80;
+        listen [::]:80;
+        server_name $DOMAIN;
+        return 301 https://\$host\$request_uri;
+    }
+
+    server {
+        listen 443 ssl http2;
+        listen [::]:443 ssl http2;
+        server_name $DOMAIN;
+
+        ssl_certificate /etc/xray/xray.crt;
+        ssl_certificate_key /etc/xray/xray.key;
+        ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+ECDSA+AES128:EECDH+aRSA+AES128:RSA+AES128:EECDH+ECDSA+AES256:EECDH+aRSA+AES256:RSA+AES256:EECDH+ECDSA+3DES:EECDH+aRSA+3DES:RSA+3DES:!MD5;
+        ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
+
+        root /home/vps/public_html;
+        
+        # --- WebSocket Proxy ---
+        location /vless {
+            proxy_redirect off;
+            proxy_pass http://127.0.0.1:14016;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host \$http_host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         }
+        
+        location /vmess {
+            proxy_redirect off;
+            proxy_pass http://127.0.0.1:23456;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host \$http_host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        }
+
+        location /trojan {
+            proxy_redirect off;
+            proxy_pass http://127.0.0.1:25432;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host \$http_host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        }
+
+        location /ss-ws {
+            proxy_redirect off;
+            proxy_pass http://127.0.0.1:30300;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host \$http_host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        }
+
+        # --- gRPC Proxy ---
+        location ^~ /vless-grpc {
+            grpc_pass grpc://127.0.0.1:24456;
+        }
+        
+        location ^~ /vmess-grpc {
+            grpc_pass grpc://127.0.0.1:31234;
+        }
+        
+        location ^~ /trojan-grpc {
+            grpc_pass grpc://127.0.0.1:33456;
+        }
+        
+        location ^~ /ss-grpc {
+            grpc_pass grpc://127.0.0.1:30310;
+        }
+
+        # --- Default Web/Fallback (Serving Static Files) ---
+        location / {
+             try_files \$uri \$uri/ =404; # Mengarahkan ke root jika tidak ada path yang cocok
+        }
+    }
 EOF
-sed -i '$ ilocation = /vless' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_pass http://127.0.0.1:14016;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_http_version 1.1;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Upgrade \$http_upgrade;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
 
-sed -i '$ ilocation = /vmess' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_pass http://127.0.0.1:23456;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_http_version 1.1;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Upgrade \$http_upgrade;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
+# Menghapus konfigurasi Nginx default jika ada (praktik yang baik)
+rm -f /etc/nginx/sites-enabled/default
+rm -f /etc/nginx/sites-available/default
 
-sed -i '$ ilocation = /trojan' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_pass http://127.0.0.1:25432;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_http_version 1.1;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Upgrade \$http_upgrade;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
-
-sed -i '$ ilocation = /ss-ws' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_pass http://127.0.0.1:30300;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_http_version 1.1;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Upgrade \$http_upgrade;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
-
-sed -i '$ ilocation /' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_pass http://127.0.0.1:700;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_http_version 1.1;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Upgrade \$http_upgrade;' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Connection "upgrade";' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
-
-sed -i '$ ilocation ^~ /vless-grpc' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_pass grpc://127.0.0.1:24456;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
-
-sed -i '$ ilocation ^~ /vmess-grpc' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_pass grpc://127.0.0.1:31234;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
-
-sed -i '$ ilocation ^~ /trojan-grpc' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_pass grpc://127.0.0.1:33456;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
-
-sed -i '$ ilocation ^~ /ss-grpc' /etc/nginx/conf.d/xray.conf
-sed -i '$ i{' /etc/nginx/conf.d/xray.conf
-sed -i '$ iproxy_redirect off;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header X-Real-IP \$remote_addr;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_set_header Host \$http_host;' /etc/nginx/conf.d/xray.conf
-sed -i '$ igrpc_pass grpc://127.0.0.1:30310;' /etc/nginx/conf.d/xray.conf
-sed -i '$ i}' /etc/nginx/conf.d/xray.conf
-
+# --- 8. Restart Services ---
 echo -e "$yellow[SERVICE]$nc Restart All service"
 systemctl daemon-reload
-sleep 1
-echo -e "[ ${green}ok${nc} ] Enable & restart xray "
-systemctl daemon-reload
+echo -e "[ ${green}ok${nc} ] Enable & restart Xray & Nginx"
 systemctl enable xray
 systemctl restart xray
+systemctl enable nginx
 systemctl restart nginx
-systemctl enable runn
-systemctl restart runn
 
+# --- 9. Download Helper Scripts (Tidak Diubah) ---
+echo -e "[ ${green}INFO${nc} ] Downloading helper scripts..."
 cd /usr/bin/
 # vmess
 wget -O add-ws "https://raw.githubusercontent.com/givps/givps/master/xray/add-ws.sh" && chmod +x add-ws
@@ -472,13 +449,16 @@ wget -O cek-ssws "https://raw.githubusercontent.com/givps/givps/master/xray/cek-
 wget -O xray-cleaner "https://raw.githubusercontent.com/givps/givps/master/xray/xray-cleaner.sh" && chmod +x xray-cleaner
 
 sleep 1
-yellow() { echo -e "\\033[33;1m${*}\\033[0m"; }
-yellow "xray/Vmess"
-yellow "xray/Vless"
+yellow "Xray/Vmess and Xray/Vless setup completed."
 
+# Final cleanup
 mv /root/domain /etc/xray/ 
-if [ -f /root/scdomain ];then
-rm /root/scdomain > /dev/null 2>&1
-fi
+rm -f /root/scdomain /root/ins-xray.sh
+
 clear
-rm -f ins-xray.sh  
+echo -e "${green}==================================================${nc}"
+echo -e " ✅ Instalasi Xray & Nginx Telah Selesai!"
+echo -e " Domain yang digunakan: ${yellow}$DOMAIN${nc}"
+echo -e " UUID (Password Default): ${yellow}$UUID${nc}"
+echo -e " Semua layanan WS/gRPC mendengarkan di port ${yellow}443${nc} melalui Nginx."
+echo -e "${green}==================================================${nc}"

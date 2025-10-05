@@ -1,46 +1,46 @@
 #!/bin/bash
 # =========================================
-# Name    : givps
-# Title   : Auto Script VPS to Manage VPN on Debian & Ubuntu Server
-# Version : 1.0
-# Author  : gilper0x
-# Website : https://givps.com
-# License : The MIT License (MIT)
+# Name    : check-vless
+# Title   : Auto Script VPS - VLESS Active User Check
+# Version : 1.2 (Optimized)
+# Author  : gilper0x & AI Assistant
+# Edition : Stable Edition 1.2
 # =========================================
-
-# Usage   : Run as root (reads /etc/xray/config.json and /var/log/xray/access.log)
 
 set -u
 
 # --- Colors ---
-red='\e[1;31m'    # Bright red
+red='\e[1;31m'    # Bright Red
 green='\e[0;32m'  # Green
-yellow='\e[1;33m' # Bright yellow
-blue='\e[1;34m'   # Bright blue
-nc='\e[0m'        # Reset color
+yellow='\e[1;33m' # Bright Yellow
+blue='\e[1;34m'   # Bright Blue
+nc='\e[0m'        # No Color (reset)
 
-CONFIG="/etc/xray/config.json"
+USER_FILE="/etc/xray/vless-users"
 ACCESS_LOG="/var/log/xray/access.log"
 
-# Temporary files (will be removed on exit)
-TMP_CONNECTED=$(mktemp) || exit 1
-TMP_MATCHED=$(mktemp) || exit 1
+# --- Temporary files for optimization ---
+TMP_CONNECTED=$(mktemp) || exit 1     # IPs with current ESTABLISHED connection to Xray process
+TMP_LOG_DATA=$(mktemp) || exit 1      # Parsed data from access log (user|ip|timestamp|hits)
+TMP_MATCHED_IP=$(mktemp) || exit 1    # IPs successfully matched to an active user
 
-cleanup() {
-  rm -f "$TMP_CONNECTED" "$TMP_MATCHED"
-}
+cleanup() { rm -f "$TMP_CONNECTED" "$TMP_LOG_DATA" "$TMP_MATCHED_IP"; }
 trap cleanup EXIT
 
+clear
 echo "Checking VPS and Xray configuration..."
-if [[ ! -f "$CONFIG" ]]; then
-  echo -e "${red}Error:${nc} $CONFIG not found."
-  exit 1
+
+# Check if user file exists and has content
+if [[ ! -s "$USER_FILE" ]]; then
+  echo -e "${yellow}No VLESS users found in $USER_FILE.${nc}"
+  exit 0
 fi
 
-# 1) Collect users from config markers like: ### username 2025-09-19 or #### username ...
-mapfile -t USERS < <(grep -E '^#{3,4} ' "$CONFIG" 2>/dev/null | awk '{print $2}' | sort -u)
+# 1) Get list of all known VLESS user emails
+mapfile -t USERS < <(awk '{print $1}' "$USER_FILE" 2>/dev/null | sort -u)
 
-# 2) Collect currently connected remote IPs from xray process (ESTABLISHED sessions)
+# 2) Get IPs with current established connection to Xray
+echo -e "[ ${green}INFO${nc} ] Checking current connections..."
 ss -tnp state established 2>/dev/null \
   | awk '/ESTAB/ && /xray/ {print $5}' \
   | sed -E 's/^\[//; s/\]$//' \
@@ -48,69 +48,112 @@ ss -tnp state established 2>/dev/null \
   | sed -E 's/^::ffff://' \
   | sort -u > "$TMP_CONNECTED"
 
-echo -e "${red}=========================================${nc}"
-echo -e "${blue}           VLESS Active Logins          ${nc}"
-echo -e "${red}=========================================${nc}"
-
-> "$TMP_MATCHED"
-
-if [[ ${#USERS[@]} -eq 0 ]]; then
-  echo -e "${yellow}No VLESS users found in config markers (### or ####).${nc}"
+if [[ ! -s "$TMP_CONNECTED" ]]; then
+    echo -e "${yellow}No current established Xray connections found.${nc}"
+    echo -e "${red}=========================================${nc}"
+    read -n 1 -s -r -p "Press any key to return to menu..."
+    type m-vless &> /dev/null && m-vless || exit 0
 fi
 
-# 3) Loop through users: count hits and last seen per IP, show only active (connected) IPs
+# 3) OPTIMIZED LOG PARSING (Single pass with awk)
+# Extracts VLESS log entries.
+# Format: user_email|IP_address|timestamp_full|hits
+echo -e "[ ${green}INFO${nc} ] Parsing Xray access log (single pass, may take a moment for large logs)..."
+if [[ -f "$ACCESS_LOG" ]]; then
+    awk -v OFS='|' -F'\t' '
+        # Only process logs containing "vless"
+        /vless/ {
+            # $4 contains the email (user)
+            user = $4;
+            # $5 contains the IP
+            # Clean IP from port and brackets/IPv6 prefix
+            ip = $5;
+            gsub(/\r$/, "", ip);
+            gsub(/:[0-9]+$/, "", ip);
+            gsub(/\[|\]/, "", ip);
+            # Handle IPv4 mapped IPv6 (::ffff:192.0.2.1)
+            gsub(/^::ffff:/, "", ip);
+
+            # $1, $2, $3 contain timestamp (date time timezone)
+            ts = $1 " " $2 " " $3;
+
+            # Store the data: user|ip|timestamp|hits
+            if (user != "" && ip != "") {
+                # Update last seen time
+                LAST_SEEN[user, ip] = ts;
+                # Count hits
+                HITS[user, ip]++;
+            }
+        }
+        END {
+            # Print all collected data
+            for (key in HITS) {
+                split(key, arr, SUBSEP);
+                user = arr[1];
+                ip = arr[2];
+                print user, ip, LAST_SEEN[user, ip], HITS[user, ip];
+            }
+        }
+    ' "$ACCESS_LOG" > "$TMP_LOG_DATA"
+else
+    echo -e "${yellow}Warning: Xray access log ($ACCESS_LOG) not found.${nc}"
+fi
+
+# 4) MATCHING AND DISPLAYING RESULTS
+echo -e "${red}=========================================${nc}"
+echo -e "${blue}          VLESS Active Logins            ${nc}"
+echo -e "${red}=========================================${nc}"
+
+ACTIVE_FOUND=0
+
 for u in "${USERS[@]}"; do
-  [[ -z "$u" ]] && continue
+    [[ -z "$u" ]] && continue
+    
+    # Extract log data for this specific user
+    USER_LOG_DATA=$(grep -F "$u|" "$TMP_LOG_DATA" 2>/dev/null || true)
+    [[ -z "$USER_LOG_DATA" ]] && continue
+    
+    # Extract unique IPs seen in the log for this user
+    USER_IPS_LOG=$(echo "$USER_LOG_DATA" | awk -F'|' '{print $2}' | sort -u)
+    
+    # Find intersection of log IPs and actively connected IPs
+    ACTIVE_IPS=$(comm -12 <(echo "$USER_IPS_LOG" | sort) "$TMP_CONNECTED" 2>/dev/null || true)
 
-  declare -A IP_COUNT=()
-  declare -A IP_LASTSEEN=()
-
-  # Read user's log lines, extract IPv4 addresses and timestamps
-  if [[ -f "$ACCESS_LOG" ]]; then
-    while IFS= read -r line; do
-      ip=$(echo "$line" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n1)
-      [[ -z "$ip" ]] && continue
-      ts=$(echo "$line" | awk '{if (NF>=3) {print $1" "$2" "$3} else {print $1}}')
-      IP_COUNT["$ip"]=$(( ${IP_COUNT["$ip"]:-0} + 1 ))
-      IP_LASTSEEN["$ip"]="$ts"
-    done < <(grep -F -- "$u" "$ACCESS_LOG" 2>/dev/null || true)
-  fi
-
-  # Find intersection with currently connected IPs
-  if [[ ${#IP_COUNT[@]} -gt 0 ]]; then
-    mapfile -t USER_IPS <<< "$(printf "%s\n" "${!IP_COUNT[@]}" | sort)"
-    mapfile -t ACTIVE_IPS <<< "$(comm -12 <(printf "%s\n" "${USER_IPS[@]}" | sort) "$TMP_CONNECTED")"
-  else
-    ACTIVE_IPS=()
-  fi
-
-  if [[ ${#ACTIVE_IPS[@]} -gt 0 ]]; then
-    echo -e "${blue}User:${nc} $u"
-    i=1
-    for ip in "${ACTIVE_IPS[@]}"; do
-      hits=${IP_COUNT[$ip]:-0}
-      last=${IP_LASTSEEN[$ip]:-"N/A"}
-      printf "  %d. %s  (hits: %s, last seen: %s)\n" "$i" "$ip" "$hits" "$last"
-      echo "$ip" >> "$TMP_MATCHED"
-      ((i++))
-    done
-    echo -e "${red}=========================================${nc}"
-  fi
+    if [[ -n "$ACTIVE_IPS" ]]; then
+        ACTIVE_FOUND=1
+        echo -e "${blue}User:${nc} ${yellow}$u${nc}"
+        i=1
+        
+        while IFS= read -r ip; do
+            # Get the latest hit and timestamp for this specific IP and user
+            # Match the exact user and IP, and take the last record (which awk ensures is the latest based on its processing order)
+            match=$(echo "$USER_LOG_DATA" | grep -F "$u|$ip" | tail -n 1)
+            
+            # Extract fields: 1=user, 2=ip, 3=timestamp, 4=hits
+            hits=$(echo "$match" | awk -F'|' '{print $4}' 2>/dev/null || echo "N/A")
+            last=$(echo "$match" | awk -F'|' '{print $3}' 2>/dev/null || echo "N/A")
+            
+            printf "  %d. ${yellow}%s${nc}  (hits: %s, last seen: %s)\n" "$i" "$ip" "$hits" "$last"
+            echo "$ip" >> "$TMP_MATCHED_IP"
+            ((i++))
+        done <<< "$ACTIVE_IPS"
+        echo -e "${red}-----------------------------------------${nc}"
+    fi
 done
 
-# 4) Show "other" connected IPs that are not linked to any user
-sort -u "$TMP_MATCHED" -o "$TMP_MATCHED"
-if [[ -s "$TMP_CONNECTED" ]]; then
-  echo -e "${blue}Other connected IPs (not matched to users):${nc}"
-  comm -23 "$TMP_CONNECTED" "$TMP_MATCHED" | nl -ba -w2 -s'. '
+if [[ $ACTIVE_FOUND -eq 0 ]]; then
+    echo -e "${yellow}No VLESS users are currently connected.${nc}"
+    echo -e "${red}=========================================${nc}"
 else
-  echo "No active established xray connections found."
+    # 5) Display unmatched IPs
+    sort -u "$TMP_MATCHED_IP" -o "$TMP_MATCHED_IP"
+    echo -e "${blue}Other connected IPs (not matched to VLESS users):${nc}"
+    comm -23 "$TMP_CONNECTED" "$TMP_MATCHED_IP" | nl -ba -w2 -s'. '
+    echo -e "${red}=========================================${nc}"
 fi
 
-echo -e "${red}=========================================${nc}"
 read -n 1 -s -r -p "Press any key to return to menu..."
 
-# Return to menu if available
 if command -v m-vless >/dev/null 2>&1; then
   m-vless
 fi
