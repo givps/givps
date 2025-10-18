@@ -18,8 +18,8 @@
                     <i class="fas fa-search"></i>
                 </div>
                 <div class="title-section">
-                    <h1>Subdomain <span class="brand">Finder</span></h1>
-                    <p class="tagline">Discover Subdomains & Enhance Your Security Analysis</p>
+                    <h1>Subdomain Finder <span class="brand">givps</span></h1>
+                    <p class="tagline">Discover subdomains using SSL certificate transparency logs</p>
                 </div>
             </div>
             <button id="theme-toggle" class="theme-toggle">
@@ -62,31 +62,29 @@
     <div class="container">
         <div class="hero-section">
             <h2>Advanced Subdomain Discovery</h2>
-            <p>Find all subdomains associated with a domain for security testing and reconnaissance</p>
+            <p>Find all subdomains associated with any domain using SSL certificate transparency data</p>
         </div>
         
         <div class="search-section">
             <div class="search-card">
-                <div class="search-form">
-                    <div class="input-group">
-                        <input type="text" id="domainInput" placeholder="Enter domain (example: example.com)" class="search-input">
-                        <button id="searchBtn" class="search-btn">
-                            <i class="fas fa-search"></i>
-                            Find Subdomains
-                        </button>
-                    </div>
-                    <div class="search-options">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="deepScan" checked>
-                            <span class="checkmark"></span>
-                            Deep Scan
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="checkHttp" checked>
-                            <span class="checkmark"></span>
-                            Check HTTP Status
-                        </label>
-                    </div>
+                <div class="search-input-group">
+                    <input type="text" id="domainInput" placeholder="Enter domain (e.g., example.com)" class="search-input">
+                    <button id="searchBtn" class="search-btn">
+                        <i class="fas fa-search"></i>
+                        Scan Domain
+                    </button>
+                </div>
+                <div class="search-options">
+                    <label class="option-checkbox">
+                        <input type="checkbox" id="wildcardCheckbox" checked>
+                        <span class="checkmark"></span>
+                        Include wildcard subdomains
+                    </label>
+                    <label class="option-checkbox">
+                        <input type="checkbox" id="uniqueCheckbox" checked>
+                        <span class="checkmark"></span>
+                        Show only unique subdomains
+                    </label>
                 </div>
             </div>
         </div>
@@ -94,94 +92,102 @@
         <div class="results-section" id="resultsSection" style="display: none;">
             <div class="results-header">
                 <h3>Scan Results</h3>
-                <div class="results-actions">
-                    <button id="exportBtn" class="action-btn">
-                        <i class="fas fa-download"></i>
-                        Export Results
-                    </button>
-                    <button id="clearBtn" class="action-btn secondary">
-                        <i class="fas fa-trash"></i>
-                        Clear Results
-                    </button>
+                <div class="results-stats">
+                    <span id="resultsCount">0</span> subdomains found
                 </div>
             </div>
             
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-globe"></i>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-number" id="totalSubdomains">0</div>
-                        <div class="stat-label">Total Subdomains</div>
-                    </div>
+            <div class="filters-section">
+                <div class="filter-group">
+                    <label for="statusFilter">Status:</label>
+                    <select id="statusFilter" class="filter-select">
+                        <option value="all">All Status</option>
+                        <option value="active">Active Only</option>
+                        <option value="inactive">Inactive Only</option>
+                    </select>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-number" id="activeSubdomains">0</div>
-                        <div class="stat-label">Active Subdomains</div>
-                    </div>
+                <div class="filter-group">
+                    <label for="typeFilter">Type:</label>
+                    <select id="typeFilter" class="filter-select">
+                        <option value="all">All Types</option>
+                        <option value="www">WWW</option>
+                        <option value="api">API</option>
+                        <option value="mail">Mail</option>
+                        <option value="ftp">FTP</option>
+                        <option value="cpanel">cPanel</option>
+                        <option value="other">Other</option>
+                    </select>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-number" id="scanTime">0s</div>
-                        <div class="stat-label">Scan Duration</div>
-                    </div>
+                <div class="filter-group">
+                    <input type="text" id="searchFilter" placeholder="Search subdomains..." class="filter-search">
+                </div>
+                <button id="exportBtn" class="export-btn">
+                    <i class="fas fa-download"></i>
+                    Export CSV
+                </button>
+            </div>
+            
+            <div class="results-container">
+                <div class="table-container">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="subdomain">Subdomain <i class="fas fa-sort"></i></th>
+                                <th data-sort="domain">Domain <i class="fas fa-sort"></i></th>
+                                <th data-sort="issuer">Issuer <i class="fas fa-sort"></i></th>
+                                <th data-sort="not_before">Valid From <i class="fas fa-sort"></i></th>
+                                <th data-sort="not_after">Valid Until <i class="fas fa-sort"></i></th>
+                                <th data-sort="status">Status <i class="fas fa-sort"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTable">
+                            <!-- Results will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="loading-results" id="loadingResults">
+                    <div class="loader-spinner"></div>
+                    <p>Scanning domain...</p>
+                </div>
+                
+                <div class="no-results" id="noResults" style="display: none;">
+                    <i class="fas fa-search"></i>
+                    <h4>No subdomains found</h4>
+                    <p>Try scanning a different domain or check your input</p>
                 </div>
             </div>
             
-            <div class="results-table-container">
-                <table class="results-table" id="resultsTable">
-                    <thead>
-                        <tr>
-                            <th>Subdomain</th>
-                            <th>IP Address</th>
-                            <th>HTTP Status</th>
-                            <th>Response Time</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultsBody">
-                        <!-- Results will be populated here -->
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="loading-section" id="loadingSection" style="display: none;">
-                <div class="loading-spinner"></div>
-                <p>Scanning for subdomains...</p>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <div class="scan-stats">
-                    <span id="currentScan">Initializing...</span>
-                </div>
+            <div class="pagination" id="pagination" style="display: none;">
+                <button id="prevPage" class="page-btn">
+                    <i class="fas fa-chevron-left"></i>
+                    Previous
+                </button>
+                <span class="page-info">Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+                <button id="nextPage" class="page-btn">
+                    Next
+                    <i class="fas fa-chevron-right"></i>
+                </button>
             </div>
         </div>
         
         <div class="features-section">
-            <h3>Powerful Subdomain Discovery Features</h3>
+            <h3>Powerful Subdomain Discovery</h3>
             <div class="features-grid">
                 <div class="feature">
-                    <i class="fas fa-bolt"></i>
-                    <h4>Fast Scanning</h4>
-                    <p>Quickly discover subdomains using multiple data sources and techniques</p>
-                </div>
-                <div class="feature">
                     <i class="fas fa-database"></i>
-                    <h4>Comprehensive Database</h4>
-                    <p>Access extensive subdomain databases and certificate transparency logs</p>
+                    <h4>Certificate Transparency</h4>
+                    <p>Leverage SSL certificate logs from crt.sh database for comprehensive coverage</p>
                 </div>
                 <div class="feature">
-                    <i class="fas fa-shield-alt"></i>
-                    <h4>Security Focused</h4>
-                    <p>Perfect for penetration testing and security assessment</p>
+                    <i class="fas fa-filter"></i>
+                    <h4>Advanced Filtering</h4>
+                    <p>Filter results by status, type, and search through found subdomains</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-download"></i>
+                    <h4>Export Results</h4>
+                    <p>Download your findings in CSV format for further analysis</p>
                 </div>
             </div>
         </div>
@@ -189,19 +195,21 @@
         <div class="info-section">
             <div class="info-cards">
                 <div class="info-card">
-                    <h4><i class="fas fa-info-circle"></i> How It Works</h4>
-                    <p>Our tool uses multiple techniques including DNS enumeration, certificate transparency logs, and web scraping to discover subdomains.</p>
+                    <i class="fas fa-info-circle"></i>
+                    <h4>How It Works</h4>
+                    <p>This tool queries the crt.sh database to find SSL certificates associated with your target domain, revealing all registered subdomains.</p>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-exclamation-triangle"></i> Legal Usage</h4>
-                    <p>Only use this tool on domains you own or have permission to test. Unauthorized scanning may be illegal.</p>
+                    <i class="fas fa-lightbulb"></i>
+                    <h4>Best Practices</h4>
+                    <p>Use for legitimate security research, penetration testing, and infrastructure discovery with proper authorization.</p>
                 </div>
             </div>
         </div>
     </div>
     
     <footer class="footer">
-        <p>&copy; 2025 givps All rights reserved. | Subdomain Finder Tool</p>
+        <p>&copy; 2024 givps. All rights reserved. | Subdomain Discovery Tool</p>
     </footer>
     
     <script src="/subdomain-finder/script.js"></script>
