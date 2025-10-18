@@ -751,3 +751,31 @@ body {
 .search-card, .feature, .info-card {
     animation: fadeInUp 0.6s ease-out;
 }
+
+/* Hero Section Link */
+.hero-link {
+    margin-top: 2rem;
+}
+
+.cta-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 2rem;
+    background: var(--gradient);
+    color: white;
+    text-decoration: none;
+    border-radius: 50px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow);
+}
+
+.cta-link:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+}
+
+.cta-link i {
+    font-size: 0.9rem;
+}
