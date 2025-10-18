@@ -63,70 +63,85 @@ class SubdomainScanner {
         this.domainInput = document.getElementById('domainInput');
         this.searchBtn = document.getElementById('searchBtn');
         this.resultsSection = document.getElementById('resultsSection');
-        this.loadingSection = document.getElementById('loadingSection');
-        this.resultsBody = document.getElementById('resultsBody');
-        this.totalSubdomains = document.getElementById('totalSubdomains');
-        this.activeSubdomains = document.getElementById('activeSubdomains');
-        this.scanTime = document.getElementById('scanTime');
-        this.exportBtn = document.getElementById('exportBtn');
-        this.clearBtn = document.getElementById('clearBtn');
-        this.progressFill = document.getElementById('progressFill');
-        this.currentScan = document.getElementById('currentScan');
+        this.resultsTable = document.getElementById('resultsTable');
+        this.resultsCount = document.getElementById('resultsCount');
+        this.loadingResults = document.getElementById('loadingResults');
+        this.noResults = document.getElementById('noResults');
+        this.wildcardCheckbox = document.getElementById('wildcardCheckbox');
+        this.uniqueCheckbox = document.getElementById('uniqueCheckbox');
         
-        this.deepScan = document.getElementById('deepScan');
-        this.checkHttp = document.getElementById('checkHttp');
-        
-        this.scanResults = [];
-        this.scanStartTime = null;
-        this.isScanning = false;
+        this.currentResults = [];
+        this.filteredResults = [];
+        this.currentPage = 1;
+        this.itemsPerPage = 10;
+        this.currentSort = { column: 'subdomain', direction: 'asc' };
         
         this.init();
     }
     
     init() {
         this.setupEventListeners();
-        this.loadSampleData(); // For demonstration
+        this.setupFilters();
     }
     
     setupEventListeners() {
         this.searchBtn.addEventListener('click', () => {
-            this.startScan();
+            this.scanDomain();
         });
         
         this.domainInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                this.startScan();
+                this.scanDomain();
             }
         });
         
-        this.exportBtn.addEventListener('click', () => {
-            this.exportResults();
-        });
-        
-        this.clearBtn.addEventListener('click', () => {
-            this.clearResults();
-        });
-        
-        // Input validation
-        this.domainInput.addEventListener('input', (e) => {
-            this.validateDomainInput(e.target.value);
-        });
-    }
-    
-    validateDomainInput(value) {
-        const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/;
-        const isValid = domainRegex.test(value) || value === '';
-        
-        if (value && !isValid) {
-            this.domainInput.style.borderColor = 'var(--warning-color)';
-        } else {
-            this.domainInput.style.borderColor = 'var(--border-color)';
+        // Enter domain from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const domainParam = urlParams.get('domain');
+        if (domainParam) {
+            this.domainInput.value = domainParam;
+            setTimeout(() => this.scanDomain(), 500);
         }
-        
-        return isValid;
     }
     
-    async startScan() {
+    setupFilters() {
+        const statusFilter = document.getElementById('statusFilter');
+        const typeFilter = document.getElementById('typeFilter');
+        const searchFilter = document.getElementById('searchFilter');
+        const exportBtn = document.getElementById('exportBtn');
+        
+        // Debounced filter function
+        const applyFilters = utils.debounce(() => {
+            this.applyFilters();
+        }, 300);
+        
+        statusFilter.addEventListener('change', applyFilters);
+        typeFilter.addEventListener('change', applyFilters);
+        searchFilter.addEventListener('input', applyFilters);
+        
+        exportBtn.addEventListener('click', () => {
+            this.exportToCSV();
+        });
+        
+        // Table sorting
+        document.querySelectorAll('.results-table th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const column = th.getAttribute('data-sort');
+                this.sortResults(column);
+            });
+        });
+        
+        // Pagination
+        document.getElementById('prevPage').addEventListener('click', () => {
+            this.previousPage();
+        });
+        
+        document.getElementById('nextPage').addEventListener('click', () => {
+            this.nextPage();
+        });
+    }
+    
+    async scanDomain() {
         const domain = this.domainInput.value.trim();
         
         if (!domain) {
@@ -134,349 +149,343 @@ class SubdomainScanner {
             return;
         }
         
-        if (!this.validateDomainInput(domain)) {
+        // Validate domain format
+        if (!this.isValidDomain(domain)) {
             this.showError('Please enter a valid domain name');
             return;
         }
         
-        this.isScanning = true;
-        this.scanResults = [];
-        this.scanStartTime = Date.now();
-        
         this.showLoading();
-        this.updateProgress(0);
+        this.searchBtn.disabled = true;
         
         try {
-            // Simulate scanning process with multiple data sources
-            await this.scanWithSource('DNS Enumeration', 20);
-            await this.scanWithSource('Certificate Transparency', 40);
-            await this.scanWithSource('Search Engines', 60);
+            const subdomains = await this.fetchSubdomains(domain);
+            this.currentResults = subdomains;
+            this.applyFilters();
+            this.showResults();
             
-            if (this.deepScan.checked) {
-                await this.scanWithSource('Brute Force', 80);
-                await this.scanWithSource('Web Archives', 95);
-            }
-            
-            await this.scanWithSource('Finalizing', 100);
-            
-            this.completeScan();
         } catch (error) {
-            this.showError('Scan failed: ' + error.message);
+            console.error('Scan error:', error);
+            this.showError('Failed to scan domain. Please try again.');
+        } finally {
             this.hideLoading();
+            this.searchBtn.disabled = false;
         }
     }
     
-    async scanWithSource(sourceName, progress) {
-        this.currentScan.textContent = `Scanning: ${sourceName}`;
-        this.updateProgress(progress);
+    async fetchSubdomains(domain) {
+        const apiUrl = `https://crt.sh/?q=%25.${domain}&output=json`;
         
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+            throw new Error('API request failed');
+        }
         
-        // Generate mock subdomains based on the source
-        const mockSubdomains = this.generateMockSubdomains(sourceName);
-        this.scanResults.push(...mockSubdomains);
-        
-        // Update UI with new results
-        this.updateResultsTable();
-        this.updateStats();
+        const data = await response.json();
+        return this.processSubdomainData(data, domain);
     }
     
-    generateMockSubdomains(source) {
-        const domain = this.domainInput.value.trim();
-        const baseSubdomains = [
-            'www', 'mail', 'ftp', 'localhost', 'webmail', 'smtp', 'pop', 'imap',
-            'blog', 'news', 'shop', 'store', 'api', 'dev', 'test', 'staging',
-            'secure', 'login', 'admin', 'dashboard', 'cpanel', 'whm', 'webdisk',
-            'ns1', 'ns2', 'dns1', 'dns2', 'cdn', 'static', 'img', 'images',
-            'assets', 'media', 'uploads', 'download', 'files', 'docs', 'support',
-            'help', 'forum', 'community', 'chat', 'live', 'status', 'monitor'
+    processSubdomainData(data, domain) {
+        const subdomains = new Map();
+        
+        data.forEach(cert => {
+            const commonName = cert.common_name;
+            
+            if (commonName && this.isSubdomain(commonName, domain)) {
+                // Skip wildcard certificates if not wanted
+                if (!this.wildcardCheckbox.checked && commonName.includes('*')) {
+                    return;
+                }
+                
+                const subdomain = commonName.replace('*.', '');
+                
+                if (this.uniqueCheckbox.checked && subdomains.has(subdomain)) {
+                    return;
+                }
+                
+                subdomains.set(subdomain, {
+                    subdomain: subdomain,
+                    domain: domain,
+                    issuer: cert.issuer_name || 'Unknown',
+                    not_before: cert.not_before ? new Date(cert.not_before) : null,
+                    not_after: cert.not_after ? new Date(cert.not_after) : null,
+                    status: this.checkCertificateStatus(cert.not_after),
+                    type: this.getSubdomainType(subdomain)
+                });
+            }
+        });
+        
+        return Array.from(subdomains.values());
+    }
+    
+    isSubdomain(name, domain) {
+        return name.endsWith('.' + domain) || name === domain;
+    }
+    
+    isValidDomain(domain) {
+        const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+        return domainRegex.test(domain);
+    }
+    
+    checkCertificateStatus(notAfter) {
+        if (!notAfter) return 'unknown';
+        
+        const expiryDate = new Date(notAfter);
+        const now = new Date();
+        
+        if (expiryDate < now) {
+            return 'inactive';
+        }
+        
+        // Check if certificate expires within 30 days
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        
+        if (expiryDate < thirtyDaysFromNow) {
+            return 'expiring';
+        }
+        
+        return 'active';
+    }
+    
+    getSubdomainType(subdomain) {
+        const types = {
+            'www': 'www',
+            'api': 'api',
+            'mail': 'mail',
+            'smtp': 'mail',
+            'pop': 'mail',
+            'imap': 'mail',
+            'ftp': 'ftp',
+            'cpanel': 'cpanel',
+            'admin': 'cpanel',
+            'blog': 'other',
+            'shop': 'other',
+            'store': 'other',
+            'app': 'other',
+            'dev': 'other',
+            'test': 'other',
+            'staging': 'other'
+        };
+        
+        const parts = subdomain.split('.');
+        const mainPart = parts.length > 0 ? parts[0] : '';
+        
+        return types[mainPart] || 'other';
+    }
+    
+    applyFilters() {
+        const statusFilter = document.getElementById('statusFilter').value;
+        const typeFilter = document.getElementById('typeFilter').value;
+        const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+        
+        this.filteredResults = this.currentResults.filter(item => {
+            // Status filter
+            if (statusFilter !== 'all' && item.status !== statusFilter && 
+                !(statusFilter === 'active' && (item.status === 'active' || item.status === 'expiring'))) {
+                return false;
+            }
+            
+            // Type filter
+            if (typeFilter !== 'all' && item.type !== typeFilter) {
+                return false;
+            }
+            
+            // Search filter
+            if (searchFilter && !item.subdomain.toLowerCase().includes(searchFilter)) {
+                return false;
+            }
+            
+            return true;
+        });
+        
+        this.resultsCount.textContent = this.filteredResults.length;
+        this.currentPage = 1;
+        this.renderTable();
+        this.updatePagination();
+    }
+    
+    sortResults(column) {
+        if (this.currentSort.column === column) {
+            this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.currentSort.column = column;
+            this.currentSort.direction = 'asc';
+        }
+        
+        this.filteredResults.sort((a, b) => {
+            let aValue = a[column];
+            let bValue = b[column];
+            
+            if (column === 'not_before' || column === 'not_after') {
+                aValue = aValue ? new Date(aValue) : new Date(0);
+                bValue = bValue ? new Date(bValue) : new Date(0);
+            }
+            
+            if (aValue < bValue) return this.currentSort.direction === 'asc' ? -1 : 1;
+            if (aValue > bValue) return this.currentSort.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        this.renderTable();
+        this.updateSortIndicators();
+    }
+    
+    updateSortIndicators() {
+        document.querySelectorAll('.results-table th i').forEach(icon => {
+            icon.className = 'fas fa-sort';
+        });
+        
+        const currentTh = document.querySelector(`.results-table th[data-sort="${this.currentSort.column}"] i`);
+        if (currentTh) {
+            currentTh.className = this.currentSort.direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+        }
+    }
+    
+    renderTable() {
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const pageData = this.filteredResults.slice(startIndex, endIndex);
+        
+        if (pageData.length === 0) {
+            this.resultsTable.innerHTML = '';
+            return;
+        }
+        
+        this.resultsTable.innerHTML = pageData.map(item => `
+            <tr>
+                <td>
+                    <strong>${this.escapeHtml(item.subdomain)}</strong>
+                </td>
+                <td>${this.escapeHtml(item.domain)}</td>
+                <td>${this.escapeHtml(this.truncateText(item.issuer, 30))}</td>
+                <td>${item.not_before ? item.not_before.toLocaleDateString() : 'N/A'}</td>
+                <td>${item.not_after ? item.not_after.toLocaleDateString() : 'N/A'}</td>
+                <td>
+                    <span class="status-badge status-${item.status}">
+                        ${this.getStatusText(item.status)}
+                    </span>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    getStatusText(status) {
+        const statusMap = {
+            'active': 'Active',
+            'expiring': 'Expiring Soon',
+            'inactive': 'Expired',
+            'unknown': 'Unknown'
+        };
+        return statusMap[status] || 'Unknown';
+    }
+    
+    updatePagination() {
+        const totalPages = Math.ceil(this.filteredResults.length / this.itemsPerPage);
+        const pagination = document.getElementById('pagination');
+        const currentPageElem = document.getElementById('currentPage');
+        const totalPagesElem = document.getElementById('totalPages');
+        const prevBtn = document.getElementById('prevPage');
+        const nextBtn = document.getElementById('nextPage');
+        
+        currentPageElem.textContent = this.currentPage;
+        totalPagesElem.textContent = totalPages;
+        
+        prevBtn.disabled = this.currentPage === 1;
+        nextBtn.disabled = this.currentPage === totalPages;
+        
+        if (totalPages > 1) {
+            pagination.style.display = 'flex';
+        } else {
+            pagination.style.display = 'none';
+        }
+    }
+    
+    previousPage() {
+        if (this.currentPage > 1) {
+            this.currentPage--;
+            this.renderTable();
+            this.updatePagination();
+        }
+    }
+    
+    nextPage() {
+        const totalPages = Math.ceil(this.filteredResults.length / this.itemsPerPage);
+        if (this.currentPage < totalPages) {
+            this.currentPage++;
+            this.renderTable();
+            this.updatePagination();
+        }
+    }
+    
+    exportToCSV() {
+        if (this.filteredResults.length === 0) {
+            this.showError('No data to export');
+            return;
+        }
+        
+        const headers = ['Subdomain', 'Domain', 'Issuer', 'Valid From', 'Valid Until', 'Status'];
+        const csvData = [
+            headers,
+            ...this.filteredResults.map(item => [
+                item.subdomain,
+                item.domain,
+                item.issuer,
+                item.not_before ? item.not_before.toISOString() : 'N/A',
+                item.not_after ? item.not_after.toISOString() : 'N/A',
+                this.getStatusText(item.status)
+            ])
         ];
         
-        const additionalSubdomains = [
-            'app', 'apps', 'mobile', 'm', 'portal', 'gateway', 'proxy',
-            'vpn', 'remote', 'access', 'secure', 'auth', 'oauth',
-            'backup', 'archive', 'old', 'new', 'temp', 'tmp'
-        ];
+        const csvContent = csvData.map(row => 
+            row.map(field => `"${field.replace(/"/g, '""')}"`).join(',')
+        ).join('\n');
         
-        let subdomains = [...baseSubdomains];
-        
-        if (this.deepScan.checked) {
-            subdomains = [...subdomains, ...additionalSubdomains];
-        }
-        
-        // Shuffle and take a random sample
-        const shuffled = subdomains.sort(() => 0.5 - Math.random());
-        const sampleSize = this.deepScan.checked ? 
-            Math.floor(Math.random() * 10) + 15 : 
-            Math.floor(Math.random() * 8) + 8;
-        
-        const selected = shuffled.slice(0, sampleSize);
-        
-        return selected.map(subdomain => {
-            const fullSubdomain = `${subdomain}.${domain}`;
-            const isActive = Math.random() > 0.3; // 70% chance of being active
-            
-            return {
-                subdomain: fullSubdomain,
-                ip: this.generateRandomIP(),
-                status: isActive ? this.getRandomStatus() : 0,
-                responseTime: isActive ? (Math.random() * 500 + 50).toFixed(0) : 0,
-                source: source
-            };
-        });
-    }
-    
-    generateRandomIP() {
-        return `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
-    }
-    
-    getRandomStatus() {
-        const statuses = [200, 200, 200, 200, 301, 302, 403, 404, 500];
-        return statuses[Math.floor(Math.random() * statuses.length)];
-    }
-    
-    updateProgress(percentage) {
-        this.progressFill.style.width = `${percentage}%`;
-    }
-    
-    updateResultsTable() {
-        // Remove duplicates based on subdomain
-        const uniqueResults = this.scanResults.reduce((acc, current) => {
-            if (!acc.find(item => item.subdomain === current.subdomain)) {
-                acc.push(current);
-            }
-            return acc;
-        }, []);
-        
-        this.resultsBody.innerHTML = '';
-        
-        uniqueResults.forEach(result => {
-            const row = document.createElement('tr');
-            
-            const statusClass = result.status >= 200 && result.status < 300 ? 'status-success' :
-                              result.status >= 300 && result.status < 400 ? 'status-warning' :
-                              result.status >= 400 ? 'status-error' : 'status-error';
-            
-            const statusText = result.status === 0 ? 'Inactive' : `HTTP ${result.status}`;
-            const responseTime = result.status === 0 ? 'N/A' : `${result.responseTime}ms`;
-            
-            row.innerHTML = `
-                <td>
-                    <strong>${result.subdomain}</strong>
-                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                        Source: ${result.source}
-                    </div>
-                </td>
-                <td>${result.ip}</td>
-                <td>
-                    <span class="status-badge ${statusClass}">${statusText}</span>
-                </td>
-                <td>${responseTime}</td>
-                <td>
-                    <button class="view-btn" onclick="subdomainScanner.viewSubdomain('${result.subdomain}')">
-                        <i class="fas fa-external-link-alt"></i>
-                        View
-                    </button>
-                </td>
-            `;
-            
-            this.resultsBody.appendChild(row);
-        });
-    }
-    
-    updateStats() {
-        const uniqueResults = this.scanResults.reduce((acc, current) => {
-            if (!acc.find(item => item.subdomain === current.subdomain)) {
-                acc.push(current);
-            }
-            return acc;
-        }, []);
-        
-        const activeCount = uniqueResults.filter(result => result.status !== 0).length;
-        const totalCount = uniqueResults.length;
-        
-        this.totalSubdomains.textContent = totalCount;
-        this.activeSubdomains.textContent = activeCount;
-        
-        if (this.scanStartTime) {
-            const duration = ((Date.now() - this.scanStartTime) / 1000).toFixed(1);
-            this.scanTime.textContent = `${duration}s`;
-        }
-    }
-    
-    completeScan() {
-        this.isScanning = false;
-        this.hideLoading();
-        this.showResults();
-        
-        // Show completion message
-        this.showNotification('Scan completed successfully!', 'success');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `subdomains-${this.domainInput.value}-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
     
     showLoading() {
-        this.searchBtn.disabled = true;
-        this.searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
-        this.loadingSection.style.display = 'block';
-        this.resultsSection.style.display = 'block';
+        this.loadingResults.style.display = 'block';
+        this.noResults.style.display = 'none';
+        this.resultsTable.innerHTML = '';
     }
     
     hideLoading() {
-        this.searchBtn.disabled = false;
-        this.searchBtn.innerHTML = '<i class="fas fa-search"></i> Find Subdomains';
-        this.loadingSection.style.display = 'none';
+        this.loadingResults.style.display = 'none';
     }
     
     showResults() {
         this.resultsSection.style.display = 'block';
-    }
-    
-    viewSubdomain(subdomain) {
-        const protocol = this.checkHttp.checked ? 'http' : 'https';
-        const url = `${protocol}://${subdomain}`;
-        window.open(url, '_blank');
-    }
-    
-    exportResults() {
-        if (this.scanResults.length === 0) {
-            this.showError('No results to export');
-            return;
+        
+        if (this.filteredResults.length === 0) {
+            this.noResults.style.display = 'block';
+            this.resultsTable.innerHTML = '';
+        } else {
+            this.noResults.style.display = 'none';
         }
-        
-        const uniqueResults = this.scanResults.reduce((acc, current) => {
-            if (!acc.find(item => item.subdomain === current.subdomain)) {
-                acc.push(current);
-            }
-            return acc;
-        }, []);
-        
-        const csvContent = this.convertToCSV(uniqueResults);
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        
-        const domain = this.domainInput.value.trim() || 'subdomains';
-        a.setAttribute('href', url);
-        a.setAttribute('download', `${domain}-subdomains-${new Date().getTime()}.csv`);
-        a.click();
-        
-        window.URL.revokeObjectURL(url);
-        this.showNotification('Results exported successfully!', 'success');
-    }
-    
-    convertToCSV(results) {
-        const headers = ['Subdomain', 'IP Address', 'HTTP Status', 'Response Time', 'Source'];
-        const csvRows = [headers.join(',')];
-        
-        results.forEach(result => {
-            const row = [
-                result.subdomain,
-                result.ip,
-                result.status,
-                result.responseTime,
-                result.source
-            ];
-            csvRows.push(row.join(','));
-        });
-        
-        return csvRows.join('\n');
-    }
-    
-    clearResults() {
-        this.scanResults = [];
-        this.resultsBody.innerHTML = '';
-        this.updateStats();
-        this.resultsSection.style.display = 'none';
-        this.showNotification('Results cleared', 'info');
     }
     
     showError(message) {
-        this.showNotification(message, 'error');
+        alert(message); // In a real app, you might want a better error display
     }
     
-    showNotification(message, type = 'info') {
-        // Remove existing notifications
-        const existingNotifications = document.querySelectorAll('.notification');
-        existingNotifications.forEach(notification => notification.remove());
-        
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.innerHTML = `
-            <div class="notification-content">
-                <i class="fas fa-${this.getNotificationIcon(type)}"></i>
-                <span>${message}</span>
-            </div>
-        `;
-        
-        // Add styles
-        const style = document.createElement('style');
-        style.textContent = `
-            .notification {
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: var(--surface-color);
-                border: 1px solid var(--border-color);
-                border-radius: 10px;
-                padding: 1rem 1.5rem;
-                box-shadow: var(--shadow-lg);
-                z-index: 1000;
-                animation: slideInRight 0.3s ease;
-            }
-            .notification-success {
-                border-left: 4px solid var(--secondary-color);
-            }
-            .notification-error {
-                border-left: 4px solid var(--warning-color);
-            }
-            .notification-info {
-                border-left: 4px solid var(--primary-color);
-            }
-            .notification-content {
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-            }
-            @keyframes slideInRight {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-        `;
-        
-        if (!document.querySelector('#notification-styles')) {
-            style.id = 'notification-styles';
-            document.head.appendChild(style);
-        }
-        
-        document.body.appendChild(notification);
-        
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.style.animation = 'slideInRight 0.3s ease reverse';
-                setTimeout(() => notification.remove(), 300);
-            }
-        }, 5000);
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     
-    getNotificationIcon(type) {
-        const icons = {
-            success: 'check-circle',
-            error: 'exclamation-circle',
-            info: 'info-circle'
-        };
-        return icons[type] || 'info-circle';
-    }
-    
-    loadSampleData() {
-        // Pre-fill with sample domain for demonstration
-        this.domainInput.placeholder = "example.com";
+    truncateText(text, maxLength) {
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
     }
 }
 
@@ -500,6 +509,7 @@ class NavigationManager {
                 
                 e.preventDefault();
                 this.setActiveLink(link);
+                this.showLoadingState();
                 
                 setTimeout(() => {
                     window.location.href = link.href;
@@ -513,6 +523,34 @@ class NavigationManager {
             link.classList.remove('active');
         });
         activeLink.classList.add('active');
+    }
+    
+    showLoadingState() {
+        const loader = document.createElement('div');
+        loader.className = 'page-loader';
+        loader.innerHTML = `
+            <div class="loader-spinner"></div>
+            <p>Navigating...</p>
+        `;
+        document.body.appendChild(loader);
+        
+        const style = document.createElement('style');
+        style.textContent = `
+            .page-loader {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: var(--background-color);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 9999;
+            }
+        `;
+        document.head.appendChild(style);
     }
 }
 
@@ -621,7 +659,7 @@ class BackgroundAnimation {
 class App {
     constructor() {
         this.themeManager = new ThemeManager();
-        this.subdomainScanner = new SubdomainScanner();
+        this.scanner = new SubdomainScanner();
         this.navManager = new NavigationManager();
         this.socialManager = new SocialMediaManager();
         this.backgroundAnimation = new BackgroundAnimation();
@@ -660,12 +698,6 @@ class App {
     }
 }
 
-// Initialize the application
-document.addEventListener('DOMContentLoaded', () => {
-    window.app = new App();
-    window.subdomainScanner = window.app.subdomainScanner;
-});
-
 // Utility functions
 const utils = {
     debounce: (func, wait) => {
@@ -680,5 +712,10 @@ const utils = {
         };
     }
 };
+
+// Initialize the application
+document.addEventListener('DOMContentLoaded', () => {
+    new App();
+});
 
 window.utils = utils;
